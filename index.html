@@ -4,11 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>生活紀錄助手</title>
-    <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- 自訂 CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-800 font-sans overflow-hidden select-none">
@@ -35,10 +32,9 @@
         </div>
     </div>
 
-    <!-- 主應用介面 (預設隱藏) -->
+    <!-- 主應用介面 -->
     <div id="app-page" class="hidden min-h-screen relative pb-24">
         
-        <!-- 頂部 Header -->
         <header class="bg-white shadow-sm px-4 py-3 sticky top-0 z-10 flex justify-between items-center">
             <div>
                 <h1 class="text-lg font-bold text-gray-800">Hi, <span id="user-name">User</span></h1>
@@ -49,30 +45,26 @@
             </button>
         </header>
 
-        <!-- 主要內容 (包含滑動區域) -->
         <main id="main-container" class="pt-4 px-4 min-h-[80vh]">
             
-            <!-- Tab 切換 -->
             <div class="flex items-center justify-between mb-6 bg-white p-1 rounded-xl shadow-sm mx-auto max-w-sm">
                 <button class="tab-btn flex-1 text-center py-2 text-sm rounded-lg transition-all font-bold bg-blue-600 text-white shadow-md" data-index="0">今日統計</button>
                 <button class="tab-btn flex-1 text-center py-2 text-sm rounded-lg transition-all text-gray-400 hover:text-gray-600" data-index="1">當月平均</button>
                 <button class="tab-btn flex-1 text-center py-2 text-sm rounded-lg transition-all text-gray-400 hover:text-gray-600" data-index="2">一年內平均</button>
             </div>
 
-            <!-- 篩選器顯示區 -->
             <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
                 <div class="flex items-center gap-2 text-gray-500 text-sm">
                    <i id="view-icon" data-lucide="calendar" width="16"></i>
                    <span id="view-title">今日統計概覽</span>
                 </div>
-                <!-- 月份選擇器 (動態顯示) -->
+                <!-- 月份選擇器 -->
                 <div id="month-filter" class="hidden items-center bg-white px-2 py-1 rounded-lg shadow-sm border border-gray-200">
                     <i data-lucide="filter" width="14" class="text-gray-400 mr-2"></i>
                     <input type="month" id="month-input" class="bg-transparent text-sm font-medium text-gray-700 outline-none">
                 </div>
             </div>
             
-            <!-- 日期範圍 (年視圖用) -->
             <div id="date-range-filter" class="hidden mb-6 bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex-col gap-2">
                  <div class="text-xs text-gray-400 flex items-center gap-1">
                      <i data-lucide="filter" width="12"></i> 自訂統計範圍
@@ -118,19 +110,30 @@
                         <p class="text-xl font-bold text-gray-800"><span id="val-money">0</span> <span class="text-xs font-normal text-gray-400">$</span></p>
                     </div>
                 </div>
+                <!-- [新增] 體重 -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 col-span-2">
+                    <div class="p-3 rounded-xl bg-blue-100 text-blue-600"><i data-lucide="scale" width="24"></i></div>
+                    <div class="flex-1 flex justify-between items-center">
+                        <div>
+                            <p class="text-sm text-gray-500">目前體重</p>
+                            <p class="text-xl font-bold text-gray-800"><span id="val-weight">0</span> <span class="text-xs font-normal text-gray-400">kg</span></p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-gray-400">區間變化</p>
+                            <p id="val-weight-trend" class="text-sm font-bold text-gray-400">--</p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <!-- 列表容器 (只在今日顯示) -->
+            <!-- 列表容器 -->
             <div id="list-section" class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hidden">
                 <div class="p-4 border-b border-gray-100 bg-gray-50/50">
                     <h3 class="font-bold text-gray-700">今日紀錄明細</h3>
                 </div>
-                <div id="record-list" class="divide-y divide-gray-100 max-h-[300px] overflow-y-auto overflow-x-hidden">
-                    <!-- JS 動態插入項目 -->
-                </div>
+                <div id="record-list" class="divide-y divide-gray-100 max-h-[300px] overflow-y-auto overflow-x-hidden"></div>
             </div>
 
-            <!-- 趨勢說明 (非今日顯示) -->
             <div id="trend-info" class="hidden text-center p-8 text-gray-400 bg-white rounded-2xl border border-dashed border-gray-300">
                 <i data-lucide="trending-up" class="mx-auto mb-2 opacity-50" width="32"></i>
                 <p id="trend-text">趨勢分析</p>
@@ -138,7 +141,6 @@
 
         </main>
 
-        <!-- 底部指示點 -->
         <div class="fixed bottom-6 left-0 right-0 flex justify-center pointer-events-none opacity-30">
             <div class="flex gap-1" id="dots-container">
                 <div class="w-2 h-2 rounded-full bg-gray-800"></div>
@@ -147,7 +149,6 @@
             </div>
         </div>
 
-        <!-- FAB 按鈕 -->
         <button id="add-btn" class="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-600/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-40">
             <i data-lucide="plus" width="28"></i>
         </button>
@@ -159,23 +160,16 @@
             <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6 sm:hidden"></div>
             <h3 class="text-xl font-bold text-gray-800 mb-4 text-center">新增紀錄</h3>
 
-            <!-- 類型選擇 -->
-            <div class="flex justify-between mb-6" id="type-selector">
-                <!-- JS 生成 -->
-            </div>
+            <div class="flex justify-between mb-6" id="type-selector"></div>
 
-            <!-- 數值輸入 -->
             <div class="mb-4">
                 <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">數值 (<span id="unit-label">大卡</span>)</label>
                 <input type="number" id="amount-input" class="w-full text-3xl font-bold text-center border-b-2 border-gray-200 focus:border-blue-500 py-2 outline-none bg-transparent" placeholder="0">
             </div>
 
-            <!-- 分類選擇 -->
             <div class="mb-8">
                 <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">分類標籤</label>
-                <div class="flex flex-wrap gap-2" id="category-chips">
-                    <!-- JS 生成 -->
-                </div>
+                <div class="flex flex-wrap gap-2" id="category-chips"></div>
             </div>
 
             <div class="flex gap-3">

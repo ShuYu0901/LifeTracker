@@ -1,19 +1,14 @@
 // --- 全域變數與狀態 ---
 
-// [修改] 設定區域：分開設定網域與路徑
-// 1. 本地開發用 (預設)
 // const BASE_URL = 'http://localhost:5000'; 
-// 2. Ngrok 公開測試用
 const BASE_URL = 'https://9ee5f33b79e5.ngrok-free.app';
-
 const API_URL = `${BASE_URL}/api`;
 
 let currentUser = null;
 let records = []; 
-let viewIndex = 0; // 0: 日檢視, 1: 當月, 2: 年度
+let viewIndex = 0; 
 let selectedMonth = new Date().toISOString().slice(0, 7); 
 
-// 輔助函式：取得本地 YYYY-MM-DD 字串
 function getTodayString() {
     const now = new Date();
     const year = now.getFullYear();
@@ -29,11 +24,13 @@ let dateRange = {
     end: new Date().toISOString().split('T')[0]
 };
 
+// [修改] 新增 weight 類型
 const typeConfig = {
     diet: { icon: 'utensils', label: '飲食', color: 'text-orange-600 bg-orange-100', dot: 'bg-orange-500', unit: '大卡', categories: ['早餐', '午餐', '晚餐', '點心', '飲料'] },
     exercise: { icon: 'dumbbell', label: '運動', color: 'text-green-600 bg-green-100', dot: 'bg-green-500', unit: '分鐘', categories: ['跑步', '健身', '瑜珈', '散步', '球類'] },
     sleep: { icon: 'moon', label: '睡眠', color: 'text-indigo-600 bg-indigo-100', dot: 'bg-indigo-500', unit: '小時', categories: ['夜間睡眠', '午睡', '補眠'] },
-    money: { icon: 'wallet', label: '花費', color: 'text-yellow-600 bg-yellow-100', dot: 'bg-yellow-500', unit: '元', categories: ['餐飲', '交通', '購物', '娛樂', '帳單'] }
+    money: { icon: 'wallet', label: '花費', color: 'text-yellow-600 bg-yellow-100', dot: 'bg-yellow-500', unit: '元', categories: ['餐飲', '交通', '購物', '娛樂', '帳單'] },
+    weight: { icon: 'scale', label: '體重', color: 'text-blue-600 bg-blue-100', dot: 'bg-blue-500', unit: 'kg', categories: ['晨間', '睡前', '空腹'] }
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -44,7 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
 function initApp() {
     document.getElementById('current-date').textContent = new Date().toLocaleDateString();
     
-    // 動態注入日期選擇器
     const filterContainer = document.getElementById('month-filter').parentNode;
     if (!document.getElementById('daily-filter')) {
         const dailyDiv = document.createElement('div');
@@ -57,7 +53,6 @@ function initApp() {
         filterContainer.appendChild(dailyDiv);
     }
 
-    // 事件綁定
     document.getElementById('login-form').addEventListener('submit', handleLogin);
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
     
@@ -69,7 +64,6 @@ function initApp() {
     document.getElementById('modal-cancel').addEventListener('click', closeModal);
     document.getElementById('modal-confirm').addEventListener('click', handleSubmitRecord);
 
-    // 篩選器
     const monthInput = document.getElementById('month-input');
     monthInput.value = selectedMonth;
     monthInput.addEventListener('change', (e) => {
@@ -106,7 +100,7 @@ async function handleLogin(e) {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'ngrok-skip-browser-warning': 'true' // [修正] 略過 ngrok 警告頁面
+                'ngrok-skip-browser-warning': 'true'
             },
             body: JSON.stringify({ username, password })
         });
@@ -145,17 +139,15 @@ async function fetchRecords() {
     if (!currentUser) return;
     try {
         const res = await fetch(`${API_URL}/records/${currentUser.id}`, {
-            headers: { 'ngrok-skip-browser-warning': 'true' } // [修正] 略過 ngrok 警告頁面
+            headers: { 'ngrok-skip-browser-warning': 'true' }
         });
         
-        // [Debug] 如果回應不是 OK，拋出錯誤並顯示文字內容以便除錯
         if (!res.ok) {
             const text = await res.text();
             throw new Error(`Server returned ${res.status}: ${text}`);
         }
 
         records = await res.json();
-        console.log("All Records fetched:", records); 
         renderList(); 
     } catch (err) {
         console.error("Fetch records error", err);
@@ -166,10 +158,9 @@ async function fetchStatsApi(start, end) {
     if (!currentUser) return;
     try {
         const res = await fetch(`${API_URL}/stats/${currentUser.id}?startDate=${start}&endDate=${end}`, {
-            headers: { 'ngrok-skip-browser-warning': 'true' } // [修正] 略過 ngrok 警告頁面
+            headers: { 'ngrok-skip-browser-warning': 'true' }
         });
         
-        // [Debug] 如果回應不是 OK，拋出錯誤並顯示文字內容以便除錯
         if (!res.ok) {
             const text = await res.text();
             throw new Error(`Server returned ${res.status}: ${text}`);
@@ -181,6 +172,24 @@ async function fetchStatsApi(start, end) {
         animateValue('val-exercise', stats.exercise);
         animateValue('val-sleep', stats.sleep);
         animateValue('val-money', stats.money);
+        animateValue('val-weight', stats.weight);
+
+        // [新增] 體重趨勢顯示與顏色處理
+        const trendEl = document.getElementById('val-weight-trend');
+        const trend = stats.weightTrend || 0;
+        
+        if (trend === 0) {
+            trendEl.textContent = '-';
+            trendEl.className = 'text-sm font-bold text-gray-400';
+        } else if (trend > 0) {
+            // 變重：紅色
+            trendEl.textContent = `+${trend} kg`;
+            trendEl.className = 'text-sm font-bold text-red-500';
+        } else {
+            // 變輕：綠色
+            trendEl.textContent = `${trend} kg`;
+            trendEl.className = 'text-sm font-bold text-green-500';
+        }
 
     } catch (err) {
         console.error("Fetch stats error", err);
@@ -189,20 +198,16 @@ async function fetchStatsApi(start, end) {
 
 function animateValue(id, end) {
     const obj = document.getElementById(id);
-    obj.textContent = end;
+    if(obj) obj.textContent = end;
 }
 
-// [關鍵修正] 新增紀錄 API
 async function addRecordApi(record) {
     try {
         let submitDate = new Date(); 
         
-        // 如果目前是日檢視模式，且有選擇日期，則使用選擇的日期
         if (viewIndex === 0 && selectedDate) {
-            // 手動解析 YYYY-MM-DD，避免瀏覽器時區干擾
             const [year, month, day] = selectedDate.split('-').map(Number);
             const now = new Date();
-            // 建立該日期的時間物件 (月份在 JS Date 中是 0-11，所以要 -1)
             submitDate = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds());
         }
 
@@ -210,7 +215,7 @@ async function addRecordApi(record) {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'ngrok-skip-browser-warning': 'true' // [修正] 略過 ngrok 警告頁面
+                'ngrok-skip-browser-warning': 'true'
             },
             body: JSON.stringify({ userId: currentUser.id, ...record, date: submitDate.toISOString() })
         });
@@ -221,12 +226,9 @@ async function addRecordApi(record) {
         }
 
         const savedRecord = await res.json();
-        console.log("Server saved record:", savedRecord); 
 
-        // 更新前端資料
         records.unshift(savedRecord); 
         
-        // 強制重新渲染介面
         renderList(); 
         updateDashboard(); 
     } catch (err) {
@@ -238,7 +240,7 @@ async function deleteRecordApi(id) {
     try {
         await fetch(`${API_URL}/records/${id}`, { 
             method: 'DELETE',
-            headers: { 'ngrok-skip-browser-warning': 'true' } // [修正] 略過 ngrok 警告頁面
+            headers: { 'ngrok-skip-browser-warning': 'true' }
         });
         records = records.filter(r => r.id !== id);
         renderList();
@@ -248,7 +250,6 @@ async function deleteRecordApi(id) {
     }
 }
 
-// 視圖邏輯
 function setView(index) {
     viewIndex = index;
     
@@ -288,7 +289,6 @@ function setView(index) {
     if (viewIndex === 0) renderList();
 }
 
-// [關鍵修正] 更新 Dashboard 數據 (處理時區問題)
 function updateDashboard() {
     let start, end;
     let viewText = "";
@@ -297,15 +297,12 @@ function updateDashboard() {
     const todayStr = getTodayString();
     const isPastDate = selectedDate !== todayStr;
 
-    if (viewIndex === 0) { // 日檢視
-        // 手動解析日期，確保鎖定當天 00:00:00 ~ 23:59:59 (本地時間)
+    if (viewIndex === 0) { 
         const [y, m, d] = selectedDate.split('-').map(Number);
         
-        // 建立當天的起始與結束時間 (月份需-1)
         const startLocal = new Date(y, m - 1, d, 0, 0, 0, 0);
         const endLocal = new Date(y, m - 1, d, 23, 59, 59, 999);
         
-        // 轉為 ISO 字串送給後端
         start = startLocal.toISOString();
         end = endLocal.toISOString();
         
@@ -320,13 +317,14 @@ function updateDashboard() {
         }
 
     } else { 
-        // 其他視圖邏輯維持不變
         body.classList.add('bg-gray-50');
         body.classList.remove('bg-orange-50');
 
         if (viewIndex === 1) { 
             const [year, month] = selectedMonth.split('-');
             start = new Date(year, month - 1, 1).toISOString(); 
+            // End date should be the end of month or now
+            // But for querying stats, server handles effective date for exercise.
             end = new Date(year, month, 0, 23, 59, 59).toISOString(); 
             viewText = `顯示 ${selectedMonth} 的平均數據`;
         } else { 
@@ -342,7 +340,6 @@ function updateDashboard() {
     fetchStatsApi(start, end);
 }
 
-// [關鍵修正] 列表渲染過濾
 function renderList() {
     const listContainer = document.getElementById('record-list');
     listContainer.innerHTML = '';
@@ -351,11 +348,9 @@ function renderList() {
     
     if (viewIndex === 0) {
         displayRecords = records.filter(r => {
-            // [Safety Check] 防止壞資料導致當機
             if (!r.date) return false;
             
             const rDate = new Date(r.date);
-            // 轉成本地年月日字串進行比對
             const rYear = rDate.getFullYear();
             const rMonth = String(rDate.getMonth() + 1).padStart(2, '0');
             const rDay = String(rDate.getDate()).padStart(2, '0');
@@ -375,7 +370,6 @@ function renderList() {
     displayRecords.forEach(item => {
         const config = typeConfig[item.type];
         
-        // [Safety Check] 如果資料庫有無法識別的 type，跳過不顯示
         if (!config) return;
 
         const el = document.createElement('div');
@@ -404,7 +398,6 @@ function renderList() {
     lucide.createIcons();
 }
 
-// 手勢操作
 function setupListItemSwipe(element, id) {
     const content = element.querySelector('.swipe-content');
     const deleteBtn = element.querySelector('.delete-bg');
