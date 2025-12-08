@@ -6,15 +6,14 @@
 // 2. Ngrok 公開測試用 (請取消註解下方，並貼上您的 ngrok 網址，結尾不用加斜線)
 const BASE_URL = 'https://9ee5f33b79e5.ngrok-free.app';
 
-// 自動組合 API 網址 (自動加上 /api)
 const API_URL = `${BASE_URL}/api`;
 
 let currentUser = null;
-let records = []; // 用於顯示清單
+let records = []; 
 let viewIndex = 0; // 0: 日檢視, 1: 當月, 2: 年度
-let selectedMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+let selectedMonth = new Date().toISOString().slice(0, 7); 
 
-// 輔助函式：取得本地 YYYY-MM-DD 字串 (比 toLocaleDateString 更穩健)
+// 輔助函式：取得本地 YYYY-MM-DD 字串
 function getTodayString() {
     const now = new Date();
     const year = now.getFullYear();
@@ -23,7 +22,6 @@ function getTodayString() {
     return `${year}-${month}-${day}`;
 }
 
-// 新增: 日檢視的選擇日期 (格式 YYYY-MM-DD，預設今天)
 let selectedDate = getTodayString(); 
 
 let dateRange = {
@@ -31,7 +29,6 @@ let dateRange = {
     end: new Date().toISOString().split('T')[0]
 };
 
-// 類型設定資料 (Icon 與顏色)
 const typeConfig = {
     diet: { icon: 'utensils', label: '飲食', color: 'text-orange-600 bg-orange-100', dot: 'bg-orange-500', unit: '大卡', categories: ['早餐', '午餐', '晚餐', '點心', '飲料'] },
     exercise: { icon: 'dumbbell', label: '運動', color: 'text-green-600 bg-green-100', dot: 'bg-green-500', unit: '分鐘', categories: ['跑步', '健身', '瑜珈', '散步', '球類'] },
@@ -39,7 +36,6 @@ const typeConfig = {
     money: { icon: 'wallet', label: '花費', color: 'text-yellow-600 bg-yellow-100', dot: 'bg-yellow-500', unit: '元', categories: ['餐飲', '交通', '購物', '娛樂', '帳單'] }
 };
 
-// --- DOM 載入後執行 ---
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
     lucide.createIcons();
@@ -48,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function initApp() {
     document.getElementById('current-date').textContent = new Date().toLocaleDateString();
     
-    // --- 動態注入日期選擇器 (針對日檢視) ---
+    // 動態注入日期選擇器
     const filterContainer = document.getElementById('month-filter').parentNode;
     if (!document.getElementById('daily-filter')) {
         const dailyDiv = document.createElement('div');
@@ -61,22 +57,19 @@ function initApp() {
         filterContainer.appendChild(dailyDiv);
     }
 
-    // 綁定事件
+    // 事件綁定
     document.getElementById('login-form').addEventListener('submit', handleLogin);
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
     
-    // Tab 切換
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', (e) => setView(parseInt(e.target.dataset.index)));
     });
 
-    // Modal 操作
     document.getElementById('add-btn').addEventListener('click', openModal);
     document.getElementById('modal-cancel').addEventListener('click', closeModal);
     document.getElementById('modal-confirm').addEventListener('click', handleSubmitRecord);
 
-    // 篩選器監聽
-    // 1. 月份
+    // 篩選器
     const monthInput = document.getElementById('month-input');
     monthInput.value = selectedMonth;
     monthInput.addEventListener('change', (e) => {
@@ -84,29 +77,24 @@ function initApp() {
         updateDashboard(); 
     });
 
-    // 2. 日期 (日檢視)
     const dailyInput = document.getElementById('daily-date-input');
     dailyInput.value = selectedDate;
     dailyInput.addEventListener('change', (e) => {
         selectedDate = e.target.value;
         updateDashboard();
-        renderList(); // 日期改變時，列表也要更新
+        renderList(); 
     });
 
-    // 3. 自訂範圍
     document.getElementById('date-start').value = dateRange.start;
     document.getElementById('date-end').value = dateRange.end;
     document.getElementById('date-start').addEventListener('change', (e) => { dateRange.start = e.target.value; updateDashboard(); });
     document.getElementById('date-end').addEventListener('change', (e) => { dateRange.end = e.target.value; updateDashboard(); });
 
-    // 主畫面左右滑動切換 Tab
     setupMainSwipe();
-    
-    // 初始隱藏不需要的篩選器
     setView(0);
 }
 
-// --- API 呼叫 ---
+// API 呼叫
 async function handleLogin(e) {
     e.preventDefault();
     const username = document.getElementById('username').value;
@@ -127,7 +115,6 @@ async function handleLogin(e) {
             document.getElementById('login-page').classList.add('hidden');
             document.getElementById('app-page').classList.remove('hidden');
             
-            // 登入後載入資料
             fetchRecords(); 
             updateDashboard(); 
         } else {
@@ -147,25 +134,21 @@ function handleLogout() {
     document.getElementById('login-page').classList.remove('hidden');
     document.getElementById('username').value = '';
     document.getElementById('password').value = '';
-    
-    // 重置背景色
     document.body.classList.remove('bg-orange-50');
     document.body.classList.add('bg-gray-50');
 }
 
-// 取得列表
 async function fetchRecords() {
     if (!currentUser) return;
     try {
         const res = await fetch(`${API_URL}/records/${currentUser.id}`);
         records = await res.json();
-        renderList(); // 更新列表 UI
+        renderList(); 
     } catch (err) {
         console.error("Fetch records error", err);
     }
 }
 
-// 取得統計數據
 async function fetchStatsApi(start, end) {
     if (!currentUser) return;
     try {
@@ -188,31 +171,34 @@ function animateValue(id, end) {
     obj.textContent = end;
 }
 
-// [修改] 新增紀錄 API：支援指定日期
+// [關鍵修正] 新增紀錄 API
 async function addRecordApi(record) {
     try {
-        let submitDate = new Date(); // 預設為當下
+        let submitDate = new Date(); 
         
         // 如果目前是日檢視模式，且有選擇日期，則使用選擇的日期
         if (viewIndex === 0 && selectedDate) {
-            const [year, month, day] = selectedDate.split('-');
+            // 手動解析 YYYY-MM-DD，避免瀏覽器時區干擾
+            const [year, month, day] = selectedDate.split('-').map(Number);
             const now = new Date();
-            // 設定為該日期的目前時間 (保留時間順序)
-            submitDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), now.getHours(), now.getMinutes(), now.getSeconds());
+            // 建立該日期的時間物件 (月份在 JS Date 中是 0-11，所以要 -1)
+            submitDate = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds());
         }
 
         const res = await fetch(`${API_URL}/records`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            // 將計算好的日期帶入
             body: JSON.stringify({ userId: currentUser.id, ...record, date: submitDate.toISOString() })
         });
         
         const savedRecord = await res.json();
-        records.unshift(savedRecord); // 加到前端陣列最前面
         
-        renderList(); // 重新渲染列表 (這時因為日期符合，就會顯示出來)
-        updateDashboard(); // 更新統計數據
+        // 更新前端資料
+        records.unshift(savedRecord); 
+        
+        // 強制重新渲染介面
+        renderList(); 
+        updateDashboard(); 
     } catch (err) {
         alert("新增失敗");
     }
@@ -229,11 +215,10 @@ async function deleteRecordApi(id) {
     }
 }
 
-// --- 視圖邏輯 ---
+// 視圖邏輯
 function setView(index) {
     viewIndex = index;
     
-    // 更新 Tab 按鈕
     document.querySelectorAll('.tab-btn').forEach(btn => {
         const btnIndex = parseInt(btn.dataset.index);
         if (btnIndex === index) {
@@ -243,19 +228,16 @@ function setView(index) {
         }
     });
 
-    // 更新底部指示點
     const dots = document.getElementById('dots-container').children;
     Array.from(dots).forEach((dot, i) => {
         dot.className = `w-2 h-2 rounded-full ${i === index ? 'bg-gray-800' : 'bg-gray-300'}`;
     });
 
-    // 更新篩選器 UI 可見性
     const dailyFilter = document.getElementById('daily-filter');
     if (dailyFilter) dailyFilter.style.display = index === 0 ? 'flex' : 'none';
     
     document.getElementById('month-filter').style.display = index === 1 ? 'flex' : 'none';
     document.getElementById('date-range-filter').style.display = index === 2 ? 'flex' : 'none';
-    
     document.getElementById('view-title').textContent = ['日統計概覽', '當月平均概覽', '日期範圍概覽'][index];
 
     const listSection = document.getElementById('list-section');
@@ -270,24 +252,29 @@ function setView(index) {
     }
 
     updateDashboard();
-    
     if (viewIndex === 0) renderList();
 }
 
-// 核心：根據視圖與選擇，計算日期範圍並處理背景色
+// [關鍵修正] 更新 Dashboard 數據 (處理時區問題)
 function updateDashboard() {
     let start, end;
     let viewText = "";
     
     const body = document.body;
-    // 使用新的 getTodayString 進行比對，更穩健
     const todayStr = getTodayString();
     const isPastDate = selectedDate !== todayStr;
 
     if (viewIndex === 0) { // 日檢視
-        const targetDate = new Date(selectedDate);
-        start = new Date(targetDate.setHours(0,0,0,0)).toISOString();
-        end = new Date(targetDate.setHours(23,59,59,999)).toISOString();
+        // 手動解析日期，確保鎖定當天 00:00:00 ~ 23:59:59 (本地時間)
+        const [y, m, d] = selectedDate.split('-').map(Number);
+        
+        // 建立當天的起始與結束時間 (月份需-1)
+        const startLocal = new Date(y, m - 1, d, 0, 0, 0, 0);
+        const endLocal = new Date(y, m - 1, d, 23, 59, 59, 999);
+        
+        // 轉為 ISO 字串送給後端
+        start = startLocal.toISOString();
+        end = endLocal.toISOString();
         
         if (isPastDate) {
             body.classList.remove('bg-gray-50');
@@ -299,16 +286,17 @@ function updateDashboard() {
             document.getElementById('view-title').textContent = '今日統計概覽';
         }
 
-    } else { // 當月或自訂
+    } else { 
+        // 其他視圖邏輯維持不變
         body.classList.add('bg-gray-50');
         body.classList.remove('bg-orange-50');
 
-        if (viewIndex === 1) { // 當月
+        if (viewIndex === 1) { 
             const [year, month] = selectedMonth.split('-');
             start = new Date(year, month - 1, 1).toISOString(); 
             end = new Date(year, month, 0, 23, 59, 59).toISOString(); 
             viewText = `顯示 ${selectedMonth} 的平均數據`;
-        } else { // 自訂範圍
+        } else { 
             start = new Date(dateRange.start).toISOString();
             const endDate = new Date(dateRange.end);
             endDate.setHours(23, 59, 59);
@@ -321,17 +309,17 @@ function updateDashboard() {
     fetchStatsApi(start, end);
 }
 
+// [關鍵修正] 列表渲染過濾
 function renderList() {
     const listContainer = document.getElementById('record-list');
     listContainer.innerHTML = '';
 
     let displayRecords = [];
     
-    // 日檢視：只顯示選擇日期的資料
     if (viewIndex === 0) {
         displayRecords = records.filter(r => {
             const rDate = new Date(r.date);
-            // 這裡也需要轉換為 YYYY-MM-DD 格式來比對
+            // 轉成本地年月日字串進行比對
             const rYear = rDate.getFullYear();
             const rMonth = String(rDate.getMonth() + 1).padStart(2, '0');
             const rDay = String(rDate.getDate()).padStart(2, '0');
@@ -342,7 +330,6 @@ function renderList() {
     }
 
     if (displayRecords.length === 0) {
-        // 使用 getTodayString
         const todayStr = getTodayString();
         const emptyText = selectedDate === todayStr ? '尚無今日紀錄' : '該日無紀錄';
         listContainer.innerHTML = `<div class="p-8 text-center text-gray-400">${emptyText}</div>`;
@@ -372,24 +359,19 @@ function renderList() {
         `;
 
         listContainer.appendChild(el);
-        // 重要：這裡綁定滑動刪除功能
         setupListItemSwipe(el, item.id);
     });
     
     lucide.createIcons();
 }
 
-// --- 手勢操作 ---
-
-// 1. 列表項目左滑刪除
+// 手勢操作
 function setupListItemSwipe(element, id) {
     const content = element.querySelector('.swipe-content');
     const deleteBtn = element.querySelector('.delete-bg');
     let startX = 0;
 
-    // --- 觸控事件 (Mobile) ---
     content.addEventListener('touchstart', (e) => {
-        // 重要：阻止事件冒泡到 main-container，避免觸發 Tab 切換
         e.stopPropagation(); 
         startX = e.touches[0].clientX;
     });
@@ -404,8 +386,6 @@ function setupListItemSwipe(element, id) {
         handleSwipe(startX, endX);
     });
 
-    // --- 滑鼠事件 (Desktop Debugging) ---
-    // 讓您在電腦上用滑鼠拖曳也能測試
     content.addEventListener('mousedown', (e) => {
         e.stopPropagation();
         startX = e.clientX;
@@ -417,26 +397,20 @@ function setupListItemSwipe(element, id) {
         handleSwipe(startX, endX);
     });
 
-    // 統一處理滑動邏輯
     function handleSwipe(start, end) {
         const diff = end - start;
-        // 左滑 > 50px 展開刪除
         if (diff < -50) {
             content.style.transform = 'translateX(-80px)';
-        } 
-        // 右滑 > 50px 收起
-        else if (diff > 50) {
+        } else if (diff > 50) {
             content.style.transform = 'translateX(0)';
         }
     }
 
-    // 點擊內容區收起
     content.addEventListener('click', (e) => {
-        e.stopPropagation(); // 避免點擊穿透
+        e.stopPropagation();
         content.style.transform = 'translateX(0)';
     });
 
-    // 點擊刪除按鈕
     deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         if(confirm('確定要刪除這筆紀錄嗎？')) {
@@ -445,7 +419,6 @@ function setupListItemSwipe(element, id) {
     });
 }
 
-// 2. 主畫面左右滑動切換 Tab
 function setupMainSwipe() {
     const main = document.getElementById('main-container');
     let startX = 0;
@@ -456,15 +429,15 @@ function setupMainSwipe() {
         const endX = e.changedTouches[0].clientX;
         const diff = startX - endX;
 
-        if (diff > 50 && viewIndex < 2) { // 左滑 (Next)
+        if (diff > 50 && viewIndex < 2) { 
             setView(viewIndex + 1);
-        } else if (diff < -50 && viewIndex > 0) { // 右滑 (Prev)
+        } else if (diff < -50 && viewIndex > 0) { 
             setView(viewIndex - 1);
         }
     });
 }
 
-// --- Modal 邏輯 ---
+// Modal 邏輯
 let modalType = 'diet';
 let modalCategory = '';
 
