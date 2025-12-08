@@ -1,9 +1,9 @@
 // --- 全域變數與狀態 ---
 
-// [修改] 設定區域：分開設定網域與路徑，避免網址錯誤
+// [修改] 設定區域：分開設定網域與路徑
 // 1. 本地開發用 (預設)
 // const BASE_URL = 'http://localhost:5000'; 
-// 2. Ngrok 公開測試用 (請取消註解下方，並貼上您的 ngrok 網址，結尾不用加斜線)
+// 2. Ngrok 公開測試用
 const BASE_URL = 'https://9ee5f33b79e5.ngrok-free.app';
 
 const API_URL = `${BASE_URL}/api`;
@@ -104,7 +104,10 @@ async function handleLogin(e) {
     try {
         const res = await fetch(`${API_URL}/login`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true' // [修正] 略過 ngrok 警告頁面
+            },
             body: JSON.stringify({ username, password })
         });
         const data = await res.json();
@@ -141,8 +144,18 @@ function handleLogout() {
 async function fetchRecords() {
     if (!currentUser) return;
     try {
-        const res = await fetch(`${API_URL}/records/${currentUser.id}`);
+        const res = await fetch(`${API_URL}/records/${currentUser.id}`, {
+            headers: { 'ngrok-skip-browser-warning': 'true' } // [修正] 略過 ngrok 警告頁面
+        });
+        
+        // [Debug] 如果回應不是 OK，拋出錯誤並顯示文字內容以便除錯
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Server returned ${res.status}: ${text}`);
+        }
+
         records = await res.json();
+        console.log("All Records fetched:", records); 
         renderList(); 
     } catch (err) {
         console.error("Fetch records error", err);
@@ -152,8 +165,16 @@ async function fetchRecords() {
 async function fetchStatsApi(start, end) {
     if (!currentUser) return;
     try {
-        const res = await fetch(`${API_URL}/stats/${currentUser.id}?startDate=${start}&endDate=${end}`);
-        if (!res.ok) throw new Error('統計計算失敗');
+        const res = await fetch(`${API_URL}/stats/${currentUser.id}?startDate=${start}&endDate=${end}`, {
+            headers: { 'ngrok-skip-browser-warning': 'true' } // [修正] 略過 ngrok 警告頁面
+        });
+        
+        // [Debug] 如果回應不是 OK，拋出錯誤並顯示文字內容以便除錯
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Server returned ${res.status}: ${text}`);
+        }
+
         const stats = await res.json();
         
         animateValue('val-diet', stats.diet);
@@ -187,12 +208,21 @@ async function addRecordApi(record) {
 
         const res = await fetch(`${API_URL}/records`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true' // [修正] 略過 ngrok 警告頁面
+            },
             body: JSON.stringify({ userId: currentUser.id, ...record, date: submitDate.toISOString() })
         });
         
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Server returned ${res.status}: ${text}`);
+        }
+
         const savedRecord = await res.json();
-        
+        console.log("Server saved record:", savedRecord); 
+
         // 更新前端資料
         records.unshift(savedRecord); 
         
@@ -200,13 +230,16 @@ async function addRecordApi(record) {
         renderList(); 
         updateDashboard(); 
     } catch (err) {
-        alert("新增失敗");
+        alert("新增失敗: " + err.message);
     }
 }
 
 async function deleteRecordApi(id) {
     try {
-        await fetch(`${API_URL}/records/${id}`, { method: 'DELETE' });
+        await fetch(`${API_URL}/records/${id}`, { 
+            method: 'DELETE',
+            headers: { 'ngrok-skip-browser-warning': 'true' } // [修正] 略過 ngrok 警告頁面
+        });
         records = records.filter(r => r.id !== id);
         renderList();
         updateDashboard(); 
@@ -318,6 +351,9 @@ function renderList() {
     
     if (viewIndex === 0) {
         displayRecords = records.filter(r => {
+            // [Safety Check] 防止壞資料導致當機
+            if (!r.date) return false;
+            
             const rDate = new Date(r.date);
             // 轉成本地年月日字串進行比對
             const rYear = rDate.getFullYear();
@@ -339,6 +375,9 @@ function renderList() {
     displayRecords.forEach(item => {
         const config = typeConfig[item.type];
         
+        // [Safety Check] 如果資料庫有無法識別的 type，跳過不顯示
+        if (!config) return;
+
         const el = document.createElement('div');
         el.className = 'swipe-item-container border-b border-gray-100 last:border-none';
         
