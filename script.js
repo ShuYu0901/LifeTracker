@@ -1,7 +1,7 @@
 // --- 全域變數與狀態 ---
 
 // const BASE_URL = 'http://localhost:5000'; 
-const BASE_URL = 'https://9ee5f33b79e5.ngrok-free.app';
+const BASE_URL = 'https://1c422f6bd0a3.ngrok-free.app';
 const API_URL = `${BASE_URL}/api`;
 
 let currentUser = null;
