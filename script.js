@@ -4,6 +4,19 @@
 const BASE_URL = 'https://be62b8d1bad2.ngrok-free.app';
 const API_URL = `${BASE_URL}/api`;
 
+const AUTH_KEY = 'life_tracker_auth'; 
+const AUTH_EXPIRY_DAYS = 30; 
+const THEME_KEY = 'life_tracker_theme';
+
+const COLORS = [
+    { name: 'blue', hex: '#2563eb', bg: '#eff6ff' },   
+    { name: 'green', hex: '#16a34a', bg: '#f0fdf4' },  
+    { name: 'orange', hex: '#ea580c', bg: '#fff7ed' }, 
+    { name: 'purple', hex: '#9333ea', bg: '#faf5ff' }, 
+    { name: 'pink', hex: '#db2777', bg: '#fdf2f8' }    
+];
+
+let currentThemeBg = '#f9fafb'; 
 let currentUser = null;
 let records = []; 
 let viewIndex = 0; 
@@ -24,7 +37,6 @@ let dateRange = {
     end: new Date().toISOString().split('T')[0]
 };
 
-// [修改] 新增 weight 類型
 const typeConfig = {
     diet: { icon: 'utensils', label: '飲食', color: 'text-orange-600 bg-orange-100', dot: 'bg-orange-500', unit: '大卡', categories: ['早餐', '午餐', '晚餐', '點心', '飲料'] },
     exercise: { icon: 'dumbbell', label: '運動', color: 'text-green-600 bg-green-100', dot: 'bg-green-500', unit: '分鐘', categories: ['跑步', '健身', '瑜珈', '散步', '球類'] },
@@ -34,15 +46,204 @@ const typeConfig = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    loadTheme();
+    checkAutoLogin();
     initApp();
+    setupAIDrawerDrag(); // [新增] 初始化拖曳功能
     lucide.createIcons();
 });
 
-function initApp() {
-    document.getElementById('current-date').textContent = new Date().toLocaleDateString();
+// [新增] AI 抽屜控制
+function openAIDrawer() {
+    const drawer = document.getElementById('ai-drawer');
+    const overlay = document.getElementById('ai-drawer-overlay');
+    if (drawer && overlay) {
+        overlay.classList.remove('hidden');
+        // 延遲一點點讓 display: block 生效後再跑動畫
+        setTimeout(() => {
+            drawer.classList.remove('translate-y-full');
+        }, 10);
+    }
+}
+
+function closeAIDrawer() {
+    const drawer = document.getElementById('ai-drawer');
+    const overlay = document.getElementById('ai-drawer-overlay');
+    if (drawer && overlay) {
+        drawer.classList.add('translate-y-full');
+        // 等動畫跑完再隱藏 overlay
+        setTimeout(() => {
+            overlay.classList.add('hidden');
+        }, 300);
+    }
+}
+
+// [新增] 抽屜拖曳邏輯
+function setupAIDrawerDrag() {
+    const handle = document.getElementById('ai-drag-handle');
+    const drawer = document.getElementById('ai-drawer');
+    const overlay = document.getElementById('ai-drawer-overlay');
     
-    const filterContainer = document.getElementById('month-filter').parentNode;
-    if (!document.getElementById('daily-filter')) {
+    if (!handle || !drawer) return;
+
+    let startY = 0;
+    let currentY = 0;
+    let isDragging = false;
+
+    // 關閉遮罩點擊
+    if (overlay) {
+        overlay.addEventListener('click', closeAIDrawer);
+    }
+
+    handle.addEventListener('touchstart', (e) => {
+        startY = e.touches[0].clientY;
+        isDragging = true;
+        drawer.style.transition = 'none'; // 拖曳時移除過渡動畫以求跟手
+    });
+
+    handle.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        const touchY = e.touches[0].clientY;
+        const diff = touchY - startY;
+        
+        // 只能往下拉
+        if (diff > 0) {
+            e.preventDefault(); // 防止滾動
+            currentY = diff;
+            drawer.style.transform = `translateY(${currentY}px)`;
+        }
+    });
+
+    handle.addEventListener('touchend', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        drawer.style.transition = 'transform 0.3s ease-out'; // 恢復動畫
+
+        // 如果拉動超過 150px 則關閉，否則回彈
+        if (currentY > 150) {
+            drawer.style.transform = ''; // 清除 inline style
+            closeAIDrawer();
+        } else {
+            drawer.style.transform = ''; // 清除 inline style，CSS class 會接手讓它回到 0
+            drawer.classList.remove('translate-y-full');
+        }
+        currentY = 0;
+    });
+}
+
+// 呼叫 AI 總結 (修改版)
+async function generateAISummary() {
+    if (!currentUser) return;
+
+    const btn = document.getElementById('ai-generate-btn');
+    const loading = document.getElementById('ai-loading');
+    const content = document.getElementById('ai-content');
+
+    btn.disabled = true;
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    loading.classList.remove('hidden');
+    loading.classList.add('flex');
+    
+    // 清空舊內容
+    content.textContent = "";
+
+    try {
+        const res = await fetch(`${API_URL}/ai-summary`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true'
+            },
+            body: JSON.stringify({ userId: currentUser.id })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            content.textContent = data.response;
+            openAIDrawer(); // [新增] 成功後打開抽屜
+        } else {
+            content.textContent = `錯誤: ${data.message || '無法取得回應'}\n${data.detail || ''}`;
+            openAIDrawer(); // 顯示錯誤
+        }
+
+    } catch (err) {
+        content.textContent = "連線失敗，請確認本地伺服器與 Ollama 是否正在執行。";
+        openAIDrawer();
+    } finally {
+        loading.classList.add('hidden');
+        loading.classList.remove('flex');
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+}
+
+function loadTheme() {
+    const savedColor = localStorage.getItem(THEME_KEY);
+    if (savedColor) {
+        applyTheme(savedColor);
+    }
+}
+
+function applyTheme(colorHex) {
+    document.documentElement.style.setProperty('--primary-color', colorHex);
+    
+    const theme = COLORS.find(c => c.hex === colorHex);
+    if (theme) {
+        currentThemeBg = theme.bg;
+    } else {
+        let r = 0, g = 0, b = 0;
+        if (colorHex.length === 7) {
+            r = parseInt(colorHex.slice(1, 3), 16);
+            g = parseInt(colorHex.slice(3, 5), 16);
+            b = parseInt(colorHex.slice(5, 7), 16);
+        }
+        currentThemeBg = `rgba(${r}, ${g}, ${b}, 0.05)`;
+    }
+
+    if (!document.body.classList.contains('bg-orange-50')) {
+        document.body.classList.remove('bg-gray-50'); 
+        document.body.style.backgroundColor = currentThemeBg;
+    }
+    
+    localStorage.setItem(THEME_KEY, colorHex);
+}
+
+function checkAutoLogin() {
+    const storedData = localStorage.getItem(AUTH_KEY);
+    if (storedData) {
+        try {
+            const { user, expiry } = JSON.parse(storedData);
+            if (new Date().getTime() < expiry) {
+                currentUser = user;
+                const userNameEl = document.getElementById('user-name');
+                const loginPage = document.getElementById('login-page');
+                const appPage = document.getElementById('app-page');
+                
+                if (userNameEl) userNameEl.textContent = currentUser.name;
+                if (loginPage) loginPage.classList.add('hidden');
+                if (appPage) appPage.classList.remove('hidden');
+                
+                fetchRecords();
+                updateDashboard();
+            } else {
+                localStorage.removeItem(AUTH_KEY);
+            }
+        } catch (e) {
+            console.error("Auto login parse error", e);
+            localStorage.removeItem(AUTH_KEY);
+        }
+    }
+}
+
+function initApp() {
+    const currentDateEl = document.getElementById('current-date');
+    if (currentDateEl) {
+        currentDateEl.textContent = new Date().toLocaleDateString();
+    }
+    
+    const filterContainer = document.getElementById('month-filter')?.parentNode;
+    if (filterContainer && !document.getElementById('daily-filter')) {
         const dailyDiv = document.createElement('div');
         dailyDiv.id = 'daily-filter';
         dailyDiv.className = 'flex items-center bg-white px-2 py-1 rounded-lg shadow-sm border border-gray-200 ml-auto'; 
@@ -53,42 +254,107 @@ function initApp() {
         filterContainer.appendChild(dailyDiv);
     }
 
-    document.getElementById('login-form').addEventListener('submit', handleLogin);
-    document.getElementById('logout-btn').addEventListener('click', handleLogout);
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
+    
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
     
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', (e) => setView(parseInt(e.target.dataset.index)));
     });
 
-    document.getElementById('add-btn').addEventListener('click', openModal);
-    document.getElementById('modal-cancel').addEventListener('click', closeModal);
-    document.getElementById('modal-confirm').addEventListener('click', handleSubmitRecord);
+    const addBtn = document.getElementById('add-btn');
+    if (addBtn) addBtn.addEventListener('click', openModal);
+    
+    const modalCancel = document.getElementById('modal-cancel');
+    if (modalCancel) modalCancel.addEventListener('click', closeModal);
+    
+    const modalConfirm = document.getElementById('modal-confirm');
+    if (modalConfirm) modalConfirm.addEventListener('click', handleSubmitRecord);
+
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsModal = document.getElementById('settings-modal');
+    const settingsClose = document.getElementById('settings-close');
+    const colorContainer = document.getElementById('color-options');
+
+    if (settingsBtn && settingsModal) {
+        settingsBtn.addEventListener('click', () => {
+            settingsModal.classList.remove('hidden');
+        });
+        
+        settingsClose.addEventListener('click', () => {
+            settingsModal.classList.add('hidden');
+        });
+
+        if (colorContainer && colorContainer.children.length === 0) {
+            COLORS.forEach(c => {
+                const btn = document.createElement('button');
+                btn.className = 'w-10 h-10 rounded-full border-2 border-white shadow-md hover:scale-110 transition-transform';
+                btn.style.backgroundColor = c.hex;
+                btn.addEventListener('click', () => {
+                    applyTheme(c.hex);
+                    btn.classList.add('ring-2', 'ring-offset-2', 'ring-gray-300');
+                    setTimeout(() => btn.classList.remove('ring-2', 'ring-offset-2', 'ring-gray-300'), 200);
+                });
+                colorContainer.appendChild(btn);
+            });
+
+            const customBtnWrapper = document.createElement('div');
+            customBtnWrapper.className = 'relative w-10 h-10 rounded-full border-2 border-white shadow-md hover:scale-110 transition-transform overflow-hidden';
+            customBtnWrapper.style.background = 'conic-gradient(from 0deg, red, yellow, lime, aqua, blue, magenta, red)';
+            customBtnWrapper.title = '自選顏色';
+            
+            const colorInput = document.createElement('input');
+            colorInput.type = 'color';
+            colorInput.className = 'absolute inset-0 w-full h-full opacity-0 cursor-pointer';
+            colorInput.addEventListener('input', (e) => {
+                applyTheme(e.target.value);
+            });
+
+            customBtnWrapper.appendChild(colorInput);
+            colorContainer.appendChild(customBtnWrapper);
+        }
+    }
 
     const monthInput = document.getElementById('month-input');
-    monthInput.value = selectedMonth;
-    monthInput.addEventListener('change', (e) => {
-        selectedMonth = e.target.value;
-        updateDashboard(); 
-    });
+    if (monthInput) {
+        monthInput.value = selectedMonth;
+        monthInput.addEventListener('change', (e) => {
+            selectedMonth = e.target.value;
+            updateDashboard(); 
+        });
+    }
 
     const dailyInput = document.getElementById('daily-date-input');
-    dailyInput.value = selectedDate;
-    dailyInput.addEventListener('change', (e) => {
-        selectedDate = e.target.value;
-        updateDashboard();
-        renderList(); 
-    });
+    if (dailyInput) {
+        dailyInput.value = selectedDate;
+        dailyInput.addEventListener('change', (e) => {
+            selectedDate = e.target.value;
+            updateDashboard();
+            renderList(); 
+        });
+    }
 
-    document.getElementById('date-start').value = dateRange.start;
-    document.getElementById('date-end').value = dateRange.end;
-    document.getElementById('date-start').addEventListener('change', (e) => { dateRange.start = e.target.value; updateDashboard(); });
-    document.getElementById('date-end').addEventListener('change', (e) => { dateRange.end = e.target.value; updateDashboard(); });
+    const dateStart = document.getElementById('date-start');
+    if (dateStart) {
+        dateStart.value = dateRange.start;
+        dateStart.addEventListener('change', (e) => { dateRange.start = e.target.value; updateDashboard(); });
+    }
+    
+    const dateEnd = document.getElementById('date-end');
+    if (dateEnd) {
+        dateEnd.value = dateRange.end;
+        dateEnd.addEventListener('change', (e) => { dateRange.end = e.target.value; updateDashboard(); });
+    }
+
+    const aiBtn = document.getElementById('ai-generate-btn');
+    if (aiBtn) aiBtn.addEventListener('click', generateAISummary);
 
     setupMainSwipe();
     setView(0);
 }
 
-// API 呼叫
 async function handleLogin(e) {
     e.preventDefault();
     const username = document.getElementById('username').value;
@@ -108,6 +374,10 @@ async function handleLogin(e) {
         
         if (res.ok) {
             currentUser = data.user;
+            
+            const expiryTime = new Date().getTime() + (AUTH_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+            localStorage.setItem(AUTH_KEY, JSON.stringify({ user: currentUser, expiry: expiryTime }));
+
             document.getElementById('user-name').textContent = currentUser.name;
             document.getElementById('login-page').classList.add('hidden');
             document.getElementById('app-page').classList.remove('hidden');
@@ -127,11 +397,16 @@ async function handleLogin(e) {
 function handleLogout() {
     currentUser = null;
     records = [];
+    
+    localStorage.removeItem(AUTH_KEY);
+
     document.getElementById('app-page').classList.add('hidden');
     document.getElementById('login-page').classList.remove('hidden');
     document.getElementById('username').value = '';
     document.getElementById('password').value = '';
+    
     document.body.classList.remove('bg-orange-50');
+    document.body.style.backgroundColor = ''; 
     document.body.classList.add('bg-gray-50');
 }
 
@@ -154,6 +429,46 @@ async function fetchRecords() {
     }
 }
 
+async function fetchWeightTrend(days = 7) {
+    if (!currentUser) return;
+    try {
+        const today = new Date();
+        const pastDate = new Date();
+        pastDate.setDate(today.getDate() - days);
+        
+        const start = pastDate.toISOString();
+        const end = today.toISOString();
+
+        const res = await fetch(`${API_URL}/stats/${currentUser.id}?startDate=${start}&endDate=${end}`, {
+            headers: { 'ngrok-skip-browser-warning': 'true' }
+        });
+
+        if (!res.ok) return;
+
+        const stats = await res.json();
+        
+        if (stats.weight > 0 && stats.weightAvg > 0) {
+            const trend = parseFloat((stats.weight - stats.weightAvg).toFixed(1));
+            const trendEl = document.getElementById('val-weight-trend');
+            
+            if (trendEl) {
+                if (trend > 0) {
+                    trendEl.textContent = `+${trend} kg`;
+                    trendEl.className = 'text-sm font-bold text-red-500';
+                } else if (trend < 0) {
+                    trendEl.textContent = `${trend} kg`;
+                    trendEl.className = 'text-sm font-bold text-green-500';
+                } else {
+                    trendEl.textContent = '持平';
+                    trendEl.className = 'text-sm font-bold text-gray-400';
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Fetch weight trend error", err);
+    }
+}
+
 async function fetchStatsApi(start, end) {
     if (!currentUser) return;
     try {
@@ -172,23 +487,44 @@ async function fetchStatsApi(start, end) {
         animateValue('val-exercise', stats.exercise);
         animateValue('val-sleep', stats.sleep);
         animateValue('val-money', stats.money);
-        animateValue('val-weight', stats.weight);
-
-        // [新增] 體重趨勢顯示與顏色處理
-        const trendEl = document.getElementById('val-weight-trend');
-        const trend = stats.weightTrend || 0;
         
-        if (trend === 0) {
-            trendEl.textContent = '-';
-            trendEl.className = 'text-sm font-bold text-gray-400';
-        } else if (trend > 0) {
-            // 變重：紅色
-            trendEl.textContent = `+${trend} kg`;
-            trendEl.className = 'text-sm font-bold text-red-500';
+        const defaultView = document.getElementById('weight-default-view');
+        const statsView = document.getElementById('weight-stats-view');
+        const trendLabelEl = document.getElementById('label-weight-trend');
+
+        if (viewIndex === 0) {
+            if (defaultView) {
+                defaultView.classList.remove('hidden');
+                defaultView.classList.add('flex');
+            }
+            if (statsView) {
+                statsView.classList.remove('flex');
+                statsView.classList.add('hidden');
+            }
+
+            animateValue('val-weight', stats.weight);
+            
+            if (trendLabelEl) trendLabelEl.textContent = '過去一周';
+            
+            const trendEl = document.getElementById('val-weight-trend');
+            if (trendEl) {
+                trendEl.textContent = '--';
+                trendEl.className = 'text-sm font-bold text-gray-400';
+            }
+
         } else {
-            // 變輕：綠色
-            trendEl.textContent = `${trend} kg`;
-            trendEl.className = 'text-sm font-bold text-green-500';
+            if (defaultView) {
+                defaultView.classList.remove('flex');
+                defaultView.classList.add('hidden');
+            }
+            if (statsView) {
+                statsView.classList.remove('hidden');
+                statsView.classList.add('flex');
+            }
+
+            animateValue('val-weight-avg', stats.weightAvg);
+            animateValue('val-weight-max', stats.weightMax);
+            animateValue('val-weight-min', stats.weightMin);
         }
 
     } catch (err) {
@@ -256,7 +592,7 @@ function setView(index) {
     document.querySelectorAll('.tab-btn').forEach(btn => {
         const btnIndex = parseInt(btn.dataset.index);
         if (btnIndex === index) {
-            btn.className = 'tab-btn flex-1 text-center py-2 text-sm rounded-lg transition-all font-bold bg-blue-600 text-white shadow-md';
+            btn.className = 'tab-btn flex-1 text-center py-2 text-sm rounded-lg transition-all font-bold bg-primary text-white shadow-md';
         } else {
             btn.className = 'tab-btn flex-1 text-center py-2 text-sm rounded-lg transition-all text-gray-400 hover:text-gray-600';
         }
@@ -270,23 +606,57 @@ function setView(index) {
     const dailyFilter = document.getElementById('daily-filter');
     if (dailyFilter) dailyFilter.style.display = index === 0 ? 'flex' : 'none';
     
-    document.getElementById('month-filter').style.display = index === 1 ? 'flex' : 'none';
-    document.getElementById('date-range-filter').style.display = index === 2 ? 'flex' : 'none';
-    document.getElementById('view-title').textContent = ['日統計概覽', '當月平均概覽', '日期範圍概覽'][index];
+    const monthFilter = document.getElementById('month-filter');
+    if (monthFilter) monthFilter.style.display = index === 1 ? 'flex' : 'none';
+
+    const rangeFilter = document.getElementById('date-range-filter');
+    if (rangeFilter) rangeFilter.style.display = index === 2 ? 'flex' : 'none';
+    
+    const viewTitle = document.getElementById('view-title');
+    if (viewTitle) viewTitle.textContent = ['日統計概覽', '當月平均概覽', '日期範圍概覽'][index];
 
     const listSection = document.getElementById('list-section');
     const trendInfo = document.getElementById('trend-info');
+    
+    const dashboardView = document.getElementById('dashboard-view');
+    const aiSection = document.getElementById('ai-section');
+    const addBtn = document.getElementById('add-btn');
 
-    if (viewIndex === 0) {
-        listSection.classList.remove('hidden');
-        trendInfo.classList.add('hidden');
+    if (index === 3) {
+        // AI View
+        if (dashboardView) dashboardView.classList.add('hidden');
+        if (aiSection) {
+            aiSection.classList.remove('hidden');
+            aiSection.classList.add('flex');
+        }
+        if (addBtn) addBtn.style.display = 'none';
     } else {
-        listSection.classList.add('hidden');
-        trendInfo.classList.remove('hidden');
-    }
+        // Normal View
+        if (dashboardView) dashboardView.classList.remove('hidden');
+        if (aiSection) {
+            aiSection.classList.add('hidden');
+            aiSection.classList.remove('flex');
+        }
+        if (addBtn) addBtn.style.display = 'flex';
 
-    updateDashboard();
-    if (viewIndex === 0) renderList();
+        if (index === 0) {
+            if (listSection) {
+                listSection.classList.remove('hidden');
+            }
+            if (trendInfo) {
+                trendInfo.classList.add('hidden');
+            }
+        } else {
+            if (listSection) {
+                listSection.classList.add('hidden');
+            }
+            if (trendInfo) {
+                trendInfo.classList.remove('hidden');
+            }
+        }
+        updateDashboard();
+        if (index === 0) renderList();
+    }
 }
 
 function updateDashboard() {
@@ -306,25 +676,28 @@ function updateDashboard() {
         start = startLocal.toISOString();
         end = endLocal.toISOString();
         
+        const viewTitle = document.getElementById('view-title');
+        
         if (isPastDate) {
+            body.style.backgroundColor = '';
             body.classList.remove('bg-gray-50');
             body.classList.add('bg-orange-50'); 
-            document.getElementById('view-title').textContent = `${selectedDate} 紀錄 (歷史)`;
+            if (viewTitle) viewTitle.textContent = `${selectedDate} 紀錄 (歷史)`;
         } else {
-            body.classList.add('bg-gray-50');
             body.classList.remove('bg-orange-50');
-            document.getElementById('view-title').textContent = '今日統計概覽';
+            body.classList.remove('bg-gray-50');
+            body.style.backgroundColor = currentThemeBg;
+            if (viewTitle) viewTitle.textContent = '今日統計概覽';
         }
 
     } else { 
-        body.classList.add('bg-gray-50');
         body.classList.remove('bg-orange-50');
+        body.classList.remove('bg-gray-50');
+        body.style.backgroundColor = currentThemeBg;
 
         if (viewIndex === 1) { 
             const [year, month] = selectedMonth.split('-');
             start = new Date(year, month - 1, 1).toISOString(); 
-            // End date should be the end of month or now
-            // But for querying stats, server handles effective date for exercise.
             end = new Date(year, month, 0, 23, 59, 59).toISOString(); 
             viewText = `顯示 ${selectedMonth} 的平均數據`;
         } else { 
@@ -334,14 +707,20 @@ function updateDashboard() {
             end = endDate.toISOString();
             viewText = `顯示 ${dateRange.start} 至 ${dateRange.end} 的平均數據`;
         }
-        document.getElementById('trend-text').textContent = viewText;
+        const trendText = document.getElementById('trend-text');
+        if (trendText) trendText.textContent = viewText;
     }
 
-    fetchStatsApi(start, end);
+    fetchStatsApi(start, end).then(() => {
+        if (viewIndex === 0) {
+            fetchWeightTrend(7); 
+        }
+    });
 }
 
 function renderList() {
     const listContainer = document.getElementById('record-list');
+    if (!listContainer) return;
     listContainer.innerHTML = '';
 
     let displayRecords = [];
@@ -373,11 +752,16 @@ function renderList() {
         if (!config) return;
 
         const el = document.createElement('div');
-        el.className = 'swipe-item-container border-b border-gray-100 last:border-none';
+        el.className = 'swipe-item-container relative overflow-hidden border-b border-gray-100 last:border-none select-none';
         
         el.innerHTML = `
-            <div class="delete-bg"><i data-lucide="x"></i></div>
-            <div class="swipe-content flex items-center justify-between p-4 bg-white relative z-10 transition-transform duration-300">
+            <div class="delete-action-area absolute inset-y-0 right-0 w-24 flex items-center justify-center z-0">
+                <button class="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center text-white shadow-sm hover:bg-red-600 transition-colors">
+                    <i data-lucide="x" width="20"></i>
+                </button>
+            </div>
+            
+            <div class="swipe-content relative z-10 bg-white flex items-center justify-between p-4 transition-transform duration-300 ease-out w-full">
                 <div class="flex items-center gap-3">
                     <div class="w-2 h-10 rounded-full ${config.dot}"></div>
                     <div>
@@ -400,7 +784,7 @@ function renderList() {
 
 function setupListItemSwipe(element, id) {
     const content = element.querySelector('.swipe-content');
-    const deleteBtn = element.querySelector('.delete-bg');
+    const deleteBtn = element.querySelector('.delete-action-area button');
     let startX = 0;
 
     content.addEventListener('touchstart', (e) => {
@@ -443,12 +827,14 @@ function setupListItemSwipe(element, id) {
         content.style.transform = 'translateX(0)';
     });
 
-    deleteBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if(confirm('確定要刪除這筆紀錄嗎？')) {
-            deleteRecordApi(id);
-        }
-    });
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if(confirm('確定要刪除這筆紀錄嗎？')) {
+                deleteRecordApi(id);
+            }
+        });
+    }
 }
 
 function setupMainSwipe() {
@@ -469,7 +855,6 @@ function setupMainSwipe() {
     });
 }
 
-// Modal 邏輯
 let modalType = 'diet';
 let modalCategory = '';
 
