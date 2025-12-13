@@ -2,11 +2,35 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>生活紀錄助手</title>
+    
+    <!-- 版本控制腳本 -->
+    <script>
+        const APP_VERSION = '1.1.0'; // 修改此處版本號以強制更新
+        const storedVersion = localStorage.getItem('app_version');
+        if (storedVersion !== APP_VERSION) {
+            console.log(`版本更新: ${storedVersion} -> ${APP_VERSION}`);
+            localStorage.setItem('app_version', APP_VERSION);
+            // 這裡可以加入清除其他舊緩存的邏輯
+        }
+    </script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css">
+    <!-- 加入版本號參數以強制重載 CSS -->
+    <link rel="stylesheet" href="style.css?v=1.1.0">
+    
+    <style>
+        /* 增加一些基礎的手機優化樣式 */
+        body {
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none;
+        }
+        /* 隱藏 Scrollbar 但保留功能 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-800 font-sans overflow-hidden select-none">
 
@@ -33,7 +57,7 @@
     </div>
 
     <!-- 主應用介面 -->
-    <div id="app-page" class="hidden min-h-screen relative pb-24">
+    <div id="app-page" class="hidden min-h-screen relative">
         
         <header class="bg-white shadow-sm px-4 py-3 sticky top-0 z-10 flex justify-between items-center">
             <div>
@@ -50,7 +74,11 @@
             </div>
         </header>
 
-        <main id="main-container" class="pt-4 px-4 min-h-[80vh] pb-32">
+        <!-- 
+           [修改] 增加底部 padding 以適配安全區域與浮動按鈕 
+           pb-[calc(9rem+env(safe-area-inset-bottom))] 確保內容不被遮擋
+        -->
+        <main id="main-container" class="pt-4 px-4 min-h-[80vh] pb-[calc(9rem+env(safe-area-inset-bottom))] overflow-y-auto no-scrollbar h-screen">
             
             <div class="flex items-center justify-between mb-6 bg-white p-1 rounded-xl shadow-sm mx-auto max-w-sm overflow-x-auto">
                 <button class="tab-btn flex-shrink-0 px-3 py-2 text-sm rounded-lg transition-all font-bold bg-primary text-white shadow-md" data-index="0">今日</button>
@@ -177,7 +205,8 @@
 
         </main>
 
-        <div class="fixed bottom-24 left-0 right-0 flex justify-center pointer-events-none opacity-30">
+        <!-- 裝飾背景點 -->
+        <div class="fixed bottom-24 left-0 right-0 flex justify-center pointer-events-none opacity-30 z-0">
             <div class="flex gap-1" id="dots-container">
                 <div class="w-2 h-2 rounded-full bg-gray-800"></div>
                 <div class="w-2 h-2 rounded-full bg-gray-300"></div>
@@ -186,27 +215,24 @@
             </div>
         </div>
 
-        <button id="add-btn" class="fixed bottom-6 left-4 right-4 h-14 bg-primary text-white rounded-t-none rounded-b-2xl shadow-lg shadow-blue-600/30 flex items-center justify-center hover:scale-[1.02] active:scale-95 transition-all z-40">
+        <!-- 
+           [修改] 浮動按鈕 
+           1. bottom-6 -> bottom-6 (基礎位置)
+           2. 加上 mb-[env(safe-area-inset-bottom)] 以避開 Home Bar 
+        -->
+        <button id="add-btn" class="fixed bottom-6 mb-[env(safe-area-inset-bottom)] left-4 right-4 h-14 bg-primary text-white rounded-t-none rounded-b-2xl shadow-lg shadow-blue-600/30 flex items-center justify-center hover:scale-[1.02] active:scale-95 transition-all z-40">
             <i data-lucide="plus" width="32"></i>
         </button>
     </div>
 
-    <!-- [修改] AI 結果抽屜 (Draggable Bottom Sheet) -->
-    <!-- 預設 translate-y-full 隱藏在底部 -->
+    <!-- AI 結果抽屜 (Draggable Bottom Sheet) -->
     <div id="ai-drawer-overlay" class="hidden fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm transition-opacity"></div>
-    
-    <div id="ai-drawer" class="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-3xl shadow-[0_-5px_30px_rgba(0,0,0,0.15)] transition-transform duration-300 ease-out transform translate-y-full h-[80vh] flex flex-col">
-        <!-- 拖曳把手區域 -->
+    <div id="ai-drawer" class="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-3xl shadow-[0_-5px_30px_rgba(0,0,0,0.15)] transition-transform duration-300 ease-out transform translate-y-full h-[80vh] flex flex-col pb-[env(safe-area-inset-bottom)]">
         <div id="ai-drag-handle" class="w-full h-10 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none flex-shrink-0">
             <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
         </div>
-        
-        <!-- 內容區域 (可捲動) -->
         <div class="flex-1 overflow-y-auto p-6 pt-0">
-            <div class="prose prose-sm max-w-none text-gray-700 whitespace-pre-line" id="ai-content">
-                <!-- AI 回應內容 -->
-            </div>
-            <!-- 底部留白 -->
+            <div class="prose prose-sm max-w-none text-gray-700 whitespace-pre-line" id="ai-content"></div>
             <div class="h-10"></div>
         </div>
     </div>
@@ -223,10 +249,21 @@
         </div>
     </div>
 
-    <!-- 新增紀錄 Modal -->
+    <!-- 
+       [修改] 新增紀錄 Modal -> 改造成底部拖動卡片樣式 
+       1. items-end (置底)
+       2. rounded-t-3xl (圓角)
+       3. 增加拖動把手區域 (drag-handle)
+       4. 增加底部安全區域 padding
+    -->
     <div id="modal-overlay" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity">
-        <div class="bg-white w-full sm:w-96 rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl animate-slide-up">
-            <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6 sm:hidden"></div>
+        <div id="modal-card" class="bg-white w-full sm:w-96 rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl animate-slide-up transition-transform duration-300 transform pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+            
+            <!-- 拖動把手 (僅手機版顯示) -->
+            <div id="modal-drag-handle" class="w-full h-6 -mt-2 mb-4 flex items-start justify-center cursor-grab active:cursor-grabbing touch-none sm:hidden">
+                <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
+            </div>
+
             <h3 class="text-xl font-bold text-gray-800 mb-4 text-center">新增紀錄</h3>
             <div class="flex justify-between mb-6" id="type-selector"></div>
             <div class="mb-4">
@@ -246,6 +283,67 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <!-- 加入版本號參數以強制重載 JS -->
+    <script src="script.js?v=1.1.0"></script>
+    
+    <!-- 額外腳本：處理 Modal 點擊外部關閉與手機拖動效果 -->
+    <script>
+        (function() {
+            // 1. 點擊遮罩關閉邏輯
+            const modalOverlay = document.getElementById('modal-overlay');
+            const modalCancel = document.getElementById('modal-cancel');
+            
+            // 監聽點擊事件
+            modalOverlay.addEventListener('click', (e) => {
+                // 如果點擊的是遮罩本身 (不是內部的 modal-card)，則觸發取消按鈕的點擊事件
+                if (e.target === modalOverlay) {
+                    modalCancel.click();
+                }
+            });
+
+            // 2. 手機版拖動下滑關閉邏輯
+            const dragHandle = document.getElementById('modal-drag-handle');
+            const modalCard = document.getElementById('modal-card');
+            let startY = 0;
+            let currentY = 0;
+            let isDragging = false;
+            
+            if(dragHandle && modalCard) {
+                dragHandle.addEventListener('touchstart', (e) => {
+                    startY = e.touches[0].clientY;
+                    isDragging = true;
+                    modalCard.style.transition = 'none'; // 移除過渡以便跟隨手指
+                }, {passive: true});
+
+                dragHandle.addEventListener('touchmove', (e) => {
+                    if (!isDragging) return;
+                    const deltaY = e.touches[0].clientY - startY;
+                    if (deltaY > 0) { // 只允許向下滑
+                        currentY = deltaY;
+                        modalCard.style.transform = `translateY(${currentY}px)`;
+                    }
+                }, {passive: true});
+
+                const endDrag = () => {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    modalCard.style.transition = 'transform 0.3s ease-out';
+                    
+                    if (currentY > 100) { // 下滑超過 100px 則關閉
+                        modalCancel.click();
+                        setTimeout(() => {
+                            modalCard.style.transform = ''; // 重置樣式
+                        }, 300);
+                    } else {
+                        modalCard.style.transform = ''; // 回彈
+                    }
+                    currentY = 0;
+                };
+
+                dragHandle.addEventListener('touchend', endDrag);
+                dragHandle.addEventListener('touchcancel', endDrag);
+            }
+        })();
+    </script>
 </body>
 </html>
