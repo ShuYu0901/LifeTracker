@@ -1,7 +1,7 @@
 // --- 全域變數與狀態 ---
 
 // const BASE_URL = 'http://localhost:5000'; 
-const BASE_URL = 'https://1df67900d7af.ngrok-free.app';
+const BASE_URL = 'https://8d88ca5f2c4b.ngrok-free.app';
 const API_URL = `${BASE_URL}/api`;
 
 const AUTH_KEY = 'life_tracker_auth'; 
