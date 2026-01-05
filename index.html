@@ -2,348 +2,961 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>生活紀錄助手</title>
-    
-    <!-- 版本控制腳本 -->
-    <script>
-        const APP_VERSION = '1.1.4'; // 修改此處版本號以強制更新
-        const storedVersion = localStorage.getItem('app_version');
-        if (storedVersion !== APP_VERSION) {
-            console.log(`版本更新: ${storedVersion} -> ${APP_VERSION}`);
-            localStorage.setItem('app_version', APP_VERSION);
-            // 這裡可以加入清除其他舊緩存的邏輯
-        }
-    </script>
-
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- 加入版本號參數以強制重載 CSS -->
-    <link rel="stylesheet" href="style.css?v=1.1.0">
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Life Logger V13 (Cloud)</title>
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
     <style>
-        /* 增加一些基礎的手機優化樣式 */
-        body {
-            -webkit-tap-highlight-color: transparent;
-            overscroll-behavior-y: none;
+        :root {
+            --bg: #000000;
+            --bg-alert: #2a0505;
+            --header-bg: rgba(0, 0, 0, 0.95);
+            --header-alert: #500;
+            --card: #1a1a1a;
+            --text: #ffffff;
+            --text-muted: #888;
+            --accent: #FFD700;       
+            --accent-green: #00FF00; 
+            --accent-blue: #00FFFF;  
+            --danger: #FF0055;
+            --border: #333;
+            --radius: 0px;
         }
-        /* 隱藏 Scrollbar 但保留功能 */
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace, sans-serif; background: var(--bg); color: var(--text); padding-bottom: 120px; height: 100vh; overflow-y: scroll; transition: background-color 0.3s; }
+
+        .header { position: sticky; top: 0; z-index: 10; background: var(--header-bg); border-bottom: 1px solid var(--border); padding: 15px; text-align: center; transition: background-color 0.3s; }
+        .header h1 { margin: 0; font-size: 18px; letter-spacing: 2px; text-transform: uppercase; }
+
+        /* Cloud Status Indicator */
+        .cloud-status { font-size: 10px; color: #666; margin-top: 5px; display: flex; align-items: center; justify-content: center; gap: 5px;}
+        .dot { width: 8px; height: 8px; background: #333; border-radius: 50%; display: inline-block; }
+        .dot.online { background: var(--accent-green); box-shadow: 0 0 5px var(--accent-green); }
+        .dot.syncing { background: var(--accent-blue); animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        .section { padding: 15px; display: none; animation: fadeIn 0.3s; }
+        .section.active { display: block; }
+
+        .card { background: var(--card); padding: 20px; margin-bottom: 20px; border: 1px solid var(--border); }
+        h2 { margin-top: 0; font-size: 14px; color: var(--text-muted); border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; letter-spacing: 1px; }
+
+        input, select, textarea {
+            width: 100%; padding: 15px; background: #000; border: 1px solid #444; color: white; 
+            font-size: 16px; margin-bottom: 10px; outline: none; font-family: inherit; border-radius: 0;
+            -webkit-appearance: none; appearance: none;
+        }
+        input:focus, textarea:focus { border-color: var(--accent); }
+        .row { display: flex; gap: 10px; align-items: center; }
+
+        .action-btn { 
+            width: 100%; background: var(--text); color: #000; border: none; padding: 15px; 
+            font-weight: bold; font-size: 16px; cursor: pointer; text-transform: uppercase; margin-top: 5px;
+        }
+        .action-btn:active { opacity: 0.8; }
+        .btn-small { padding: 5px 10px; font-size: 12px; background: #333; color: #fff; border: 1px solid #555; cursor: pointer; }
+
+        .template-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .template-btn { 
+            background: #111; border: 1px solid #444; color: #888; padding: 15px 5px; cursor: pointer; 
+            font-size: 12px; text-transform: uppercase; transition: 0.2s;
+        }
+        .template-btn.active { border-color: var(--accent-green); color: var(--accent-green); background: #0a1a0a; }
+
+        .checklist-item { display: flex; align-items: center; padding: 12px; background: #111; margin-bottom: 8px; border: 1px solid #333; cursor: pointer; }
+        .checklist-item.checked { opacity: 0.4; text-decoration: line-through; border-color: #222; }
+        .checklist-box { width: 20px; height: 20px; border: 2px solid var(--accent); margin-right: 15px; display: flex; align-items: center; justify-content: center; }
+        .checklist-item.checked .checklist-box { background: var(--accent); }
+        .checklist-item.checked .checklist-box::after { content: '✓'; color: black; font-weight: bold; font-size: 14px; }
+
+        .stats-controls { display: flex; gap: 10px; margin-bottom: 15px; background: var(--card); padding: 15px; border: 1px solid var(--border); flex-wrap: wrap; }
+        .date-group { flex: 1; display: flex; flex-direction: column; min-width: 120px; }
+        .date-group label { font-size: 10px; color: #666; margin-bottom: 5px; text-transform: uppercase; }
+        .date-group input { margin-bottom: 0; text-align: center; min-width: 0; width: 100%; padding: 8px 5px; height: 40px; font-size: 14px; }
+
+        .log-list { list-style: none; padding: 0; }
+        .log-item { background: #111; padding: 15px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--accent); }
+        .log-content { display: flex; flex-direction: column; gap: 2px; }
+        .log-date-label { font-size: 10px; color: #666; }
+        .delete-btn { color: #666; background: none; border: none; font-size: 20px; padding: 0 10px; cursor: pointer; }
+
+        .chart-container { height: 200px; width: 100%; border-left: 1px solid #444; border-bottom: 1px solid #444; margin-top: 20px; position: relative; }
+        svg { width: 100%; height: 100%; overflow: visible; }
+        polyline { fill: none; stroke: var(--text); stroke-width: 2; vector-effect: non-scaling-stroke; }
+        .chart-dot { fill: #000; stroke: var(--text); stroke-width: 2; r: 3; }
+
+        .tag-chip { background: #333; padding: 5px 10px; font-size: 12px; display: inline-block; margin: 2px; border: 1px solid #555; cursor: pointer; }
+
+        .nav-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #000; border-top: 1px solid #333; display: flex; justify-content: space-around; padding: 10px 0; padding-bottom: max(20px, env(safe-area-inset-bottom)); z-index: 100; }
+        .nav-item { color: #555; text-align: center; flex: 1; cursor: pointer; transition: 0.2s; }
+        .nav-icon { font-size: 24px; display: block; margin-bottom: 4px; filter: grayscale(1); transition: 0.2s; }
+        .nav-label { font-size: 10px; text-transform: uppercase; font-weight: bold; letter-spacing: 1px; }
+        .nav-item.active .nav-icon { filter: grayscale(0); transform: scale(1.1); }
+        .nav-item.active .nav-label { color: var(--text); }
+
+        .home-date-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; background: #111; padding: 10px; border: 1px solid #333; }
+        .home-date-bar input { margin: 0; height: 40px; border: 1px solid #444; }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen text-gray-800 font-sans overflow-hidden select-none">
+<body>
 
-    <!-- 登入頁面 (保持不變) -->
-    <div id="login-page" class="fixed inset-0 z-50 bg-gray-100 flex items-center justify-center px-4">
-        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
-            <div class="text-center mb-8">
-                <h1 class="text-2xl font-bold text-gray-800">生活紀錄助手</h1>
-                <p class="text-gray-500 text-sm mt-2">請登入以存取 API</p>
+    <div class="header">
+        <div style="flex:1">
+            <h1 id="app-title">Life Logger V13</h1>
+            <div class="cloud-status" id="cloud-status-div">
+                <span class="dot" id="cloud-dot"></span> 
+                <span id="cloud-text">Offline</span>
             </div>
-            <form id="login-form" class="space-y-6">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">帳號</label>
-                    <input type="text" id="username" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="admin" value="admin">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">密碼</label>
-                    <input type="password" id="password" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="1234" value="1234">
-                </div>
-                <p id="login-error" class="text-red-500 text-sm text-center hidden"></p>
-                <button type="submit" class="w-full bg-primary text-white py-3 rounded-xl font-semibold shadow-lg hover:opacity-90 transition">登入</button>
-            </form>
         </div>
     </div>
 
-    <!-- 主應用介面 -->
-    <div id="app-page" class="hidden min-h-screen relative">
+    <div id="view-home" class="section active" style="padding-bottom: 120px;">
         
-        <header class="bg-white shadow-sm px-4 py-3 sticky top-0 z-10 flex justify-between items-center">
-            <div>
-                <h1 class="text-lg font-bold text-gray-800">Hi, <span id="user-name">User</span></h1>
-                <p class="text-xs text-gray-500" id="current-date"></p>
+        <div class="home-date-bar">
+            <div style="flex:1">
+                <input type="date" id="current-record-date" onchange="handleDateChange()">
             </div>
-            <div class="flex gap-2">
-                <button id="settings-btn" class="p-2 bg-gray-100 rounded-full text-gray-600 hover:bg-gray-200 transition">
-                    <i data-lucide="settings" width="18"></i>
-                </button>
-                <button id="logout-btn" class="p-2 bg-gray-100 rounded-full text-gray-600 hover:bg-gray-200 transition">
-                    <i data-lucide="log-out" width="18"></i>
-                </button>
-            </div>
-        </header>
+            <button class="btn-small" style="height:40px; padding:0 15px;" onclick="resetToToday()">TODAY</button>
+        </div>
 
-        <!-- 
-           [修改] 增加底部 padding 以適配安全區域與浮動按鈕 
-           pb-[calc(9rem+env(safe-area-inset-bottom))] 確保內容不被遮擋
-        -->
-        <main id="main-container" class="pt-4 px-4 min-h-[80vh] pb-[calc(9rem+env(safe-area-inset-bottom))] overflow-y-auto no-scrollbar h-screen">
+        <div class="card">
+            <h2>💰 消費 (Expense) <button class="btn-small" onclick="openSettings('finance')">TAGS</button></h2>
+            <div class="row">
+                <select id="finance-tag"><option>Loading...</option></select>
+            </div>
+            <div class="row">
+                <input type="number" id="finance-amount" placeholder="金額 (Amount)" style="flex:1">
+            </div>
+            <input type="text" id="finance-note" placeholder="備註 (Note)">
+            <button class="action-btn" style="background: var(--accent-blue);" onclick="addRecord('finance')">ADD EXPENSE</button>
+        </div>
+
+        <div class="card">
+            <h2>🔥 飲食 (Calories) <button class="btn-small" onclick="openSettings('diet')">TAGS</button></h2>
+            <select id="diet-tag"><option>Loading...</option></select>
+            <div class="row">
+                <input type="number" id="diet-cal" placeholder="熱量 (kCal)" style="flex:1">
+            </div>
+            <button class="action-btn" style="background: var(--accent-green); color:black;" onclick="addRecord('diet')">ADD CALORIES</button>
+        </div>
+
+        <div class="card">
+            <h2>💤 睡眠 (Sleep)</h2>
+            <div class="row">
+                <input type="number" id="sleep-input" placeholder="小時 (Hours)" step="0.1">
+                <button class="action-btn" style="width:auto; background: #fff;" onclick="addRecord('sleep')">SAVE</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>⚖️ 體重 (Weight)</h2>
+            <div class="row">
+                <input type="number" id="weight-input" placeholder="公斤 (kg)" step="0.1">
+                <button class="action-btn" style="width:auto; background: var(--accent);" onclick="addRecord('weight')">SAVE</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📝 LOGS (<span id="log-list-date-label">Selected Date</span>)</h2>
+            <ul id="today-list" class="log-list"></ul>
+        </div>
+    </div>
+
+    <div id="view-fitness" class="section" style="padding-bottom: 120px;">
+        
+        <div class="card" style="border-top: 5px solid var(--accent-green);">
+            <h2>💪 訓練菜單 (TEMPLATES)</h2>
+            <div id="gym-templates-container" class="template-grid"></div>
+        </div>
+
+        <div class="card">
+            <h2>📋 目前課表 (CHECKLIST) 
+                <button id="edit-toggle-btn" class="btn-small" onclick="toggleEditMode()">✏️ 編輯</button>
+            </h2>
+
+            <div id="checklist-view">
+                <div id="checklist-container"></div>
+            </div>
+
+            <div id="edit-view" style="display:none;">
+                <textarea id="fitness-plan-input" rows="8" placeholder="輸入菜單，一行一個..." oninput="autoSaveFitnessPlan()"></textarea>
+                <p style="color:#666; font-size:12px; margin-top:5px;">* 正在輸入時自動儲存 (Auto Save)</p>
+            </div>
             
-            <div class="flex items-center justify-between mb-6 bg-white p-1 rounded-xl shadow-sm mx-auto max-w-sm overflow-x-auto">
-                <button class="tab-btn flex-shrink-0 px-3 py-2 text-sm rounded-lg transition-all font-bold bg-primary text-white shadow-md" data-index="0">今日</button>
-                <button class="tab-btn flex-shrink-0 px-3 py-2 text-sm rounded-lg transition-all text-gray-400 hover:text-gray-600" data-index="1">本月</button>
-                <button class="tab-btn flex-shrink-0 px-3 py-2 text-sm rounded-lg transition-all text-gray-400 hover:text-gray-600" data-index="2">年度</button>
-                <button class="tab-btn flex-shrink-0 px-3 py-2 text-sm rounded-lg transition-all text-gray-400 hover:text-gray-600" data-index="3">AI 總結</button>
-            </div>
-
-            <!-- 儀表板區域 (View 0, 1, 2) -->
-            <div id="dashboard-view">
-                <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-                    <div class="flex items-center gap-2 text-gray-500 text-sm">
-                    <i id="view-icon" data-lucide="calendar" width="16"></i>
-                    <span id="view-title">今日統計概覽</span>
-                    </div>
-                    <div id="month-filter" class="hidden items-center bg-white px-2 py-1 rounded-lg shadow-sm border border-gray-200">
-                        <i data-lucide="filter" width="14" class="text-gray-400 mr-2"></i>
-                        <input type="month" id="month-input" class="bg-transparent text-sm font-medium text-gray-700 outline-none">
-                    </div>
-                </div>
-                
-                <div id="date-range-filter" class="hidden mb-6 bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex-col gap-2">
-                    <div class="text-xs text-gray-400 flex items-center gap-1">
-                        <i data-lucide="filter" width="12"></i> 自訂統計範圍
-                    </div>
-                    <div class="flex items-center justify-between gap-2">
-                        <input type="date" id="date-start" class="bg-gray-50 rounded px-2 py-1 text-sm font-medium text-gray-700 outline-none flex-1">
-                        <span class="text-gray-400 text-xs">至</span>
-                        <input type="date" id="date-end" class="bg-gray-50 rounded px-2 py-1 text-sm font-medium text-gray-700 outline-none flex-1">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-3 mb-6">
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                        <div class="p-3 rounded-xl bg-orange-100 text-orange-600"><i data-lucide="utensils" width="24"></i></div>
-                        <div>
-                            <p class="text-sm text-gray-500">飲食攝取</p>
-                            <p class="text-xl font-bold text-gray-800"><span id="val-diet">0</span> <span class="text-xs font-normal text-gray-400">kcal</span></p>
-                        </div>
-                    </div>
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                        <div class="p-3 rounded-xl bg-green-100 text-green-600"><i data-lucide="dumbbell" width="24"></i></div>
-                        <div>
-                            <p class="text-sm text-gray-500">運動時間</p>
-                            <p class="text-xl font-bold text-gray-800"><span id="val-exercise">0</span> <span class="text-xs font-normal text-gray-400">min</span></p>
-                        </div>
-                    </div>
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                        <div class="p-3 rounded-xl bg-indigo-100 text-indigo-600"><i data-lucide="moon" width="24"></i></div>
-                        <div>
-                            <p class="text-sm text-gray-500">睡眠時數</p>
-                            <p class="text-xl font-bold text-gray-800"><span id="val-sleep">0</span> <span class="text-xs font-normal text-gray-400">hr</span></p>
-                        </div>
-                    </div>
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
-                        <div class="p-3 rounded-xl bg-yellow-100 text-yellow-600"><i data-lucide="wallet" width="24"></i></div>
-                        <div>
-                            <p class="text-sm text-gray-500">總花費</p>
-                            <p class="text-xl font-bold text-gray-800"><span id="val-money">0</span> <span class="text-xs font-normal text-gray-400">$</span></p>
-                        </div>
-                    </div>
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 col-span-2">
-                        <div class="p-3 rounded-xl bg-blue-100 text-blue-600"><i data-lucide="scale" width="24"></i></div>
-                        <div class="flex-1 flex justify-between items-center" id="weight-default-view">
-                            <div>
-                                <p class="text-sm text-gray-500" id="label-weight">目前體重</p>
-                                <p class="text-xl font-bold text-gray-800"><span id="val-weight">0</span> <span class="text-xs font-normal text-gray-400">kg</span></p>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-xs text-gray-400" id="label-weight-trend">區間變化</p>
-                                <p id="val-weight-trend" class="text-sm font-bold text-gray-400">--</p>
-                            </div>
-                        </div>
-                        <div class="flex-1 hidden justify-between items-center gap-2" id="weight-stats-view">
-                            <div class="text-center">
-                                <p class="text-xs text-gray-400">平均</p>
-                                <p class="text-lg font-bold text-gray-800"><span id="val-weight-avg">0</span></p>
-                            </div>
-                            <div class="text-center border-l border-gray-200 pl-2">
-                                <p class="text-xs text-gray-400">最高</p>
-                                <p class="text-lg font-bold text-red-500"><span id="val-weight-max">0</span></p>
-                            </div>
-                            <div class="text-center border-l border-gray-200 pl-2">
-                                <p class="text-xs text-gray-400">最低</p>
-                                <p class="text-lg font-bold text-green-500"><span id="val-weight-min">0</span></p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="list-section" class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hidden">
-                    <div class="p-4 border-b border-gray-100 bg-gray-50/50">
-                        <h3 class="font-bold text-gray-700">今日紀錄明細</h3>
-                    </div>
-                    <div id="record-list" class="divide-y divide-gray-100 max-h-[300px] overflow-y-auto overflow-x-hidden"></div>
-                </div>
-
-                <div id="trend-info" class="hidden text-center p-8 text-gray-400 bg-white rounded-2xl border border-dashed border-gray-300">
-                    <i data-lucide="trending-up" class="mx-auto mb-2 opacity-50" width="32"></i>
-                    <p id="trend-text">趨勢分析</p>
-                </div>
-            </div>
-
-            <!-- AI 啟動區域 -->
-            <div id="ai-section" class="hidden flex-col items-center pt-8">
-                <div class="w-full bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center mb-6">
-                    <div class="w-16 h-16 bg-gradient-to-tr from-purple-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 text-white shadow-lg">
-                        <i data-lucide="sparkles" width="32"></i>
-                    </div>
-                    <h3 class="text-xl font-bold text-gray-800 mb-2">AI 健康教練</h3>
-                    <p class="text-sm text-gray-500 mb-6">分析您過去 7 天的數據，給予個人化建議與鼓勵。</p>
-                    
-                    <button id="ai-generate-btn" class="w-full bg-primary text-white py-3 rounded-xl font-semibold shadow-lg hover:opacity-90 transition flex items-center justify-center gap-2">
-                        <i data-lucide="zap" width="18"></i> 開始分析
-                    </button>
-                </div>
-
-                <!-- Loading State (顯示在按鈕下方) -->
-                <div id="ai-loading" class="hidden flex-col items-center text-gray-400 py-4">
-                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-3"></div>
-                    <p class="text-sm">AI 正在思考中...</p>
-                </div>
-            </div>
-
-        </main>
-
-        <!-- 裝飾背景點 -->
-        <div class="fixed bottom-24 left-0 right-0 flex justify-center pointer-events-none opacity-30 z-0">
-            <div class="flex gap-1" id="dots-container">
-                <div class="w-2 h-2 rounded-full bg-gray-800"></div>
-                <div class="w-2 h-2 rounded-full bg-gray-300"></div>
-                <div class="w-2 h-2 rounded-full bg-gray-300"></div>
-                <div class="w-2 h-2 rounded-full bg-gray-300"></div>
-            </div>
-        </div>
-
-        <!-- 
-           [修改] 浮動按鈕 
-           1. bottom-6 -> bottom-6 (基礎位置)
-           2. 加上 mb-[env(safe-area-inset-bottom)] 以避開 Home Bar 
-        -->
-        <button id="add-btn" class="fixed bottom-6 mb-[env(safe-area-inset-bottom)] left-4 right-4 h-14 bg-primary text-white rounded-t-none rounded-b-2xl shadow-lg shadow-blue-600/30 flex items-center justify-center hover:scale-[1.02] active:scale-95 transition-all z-40">
-            <i data-lucide="plus" width="32"></i>
-        </button>
-    </div>
-
-    <!-- AI 結果抽屜 (Draggable Bottom Sheet) -->
-    <div id="ai-drawer-overlay" class="hidden fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm transition-opacity"></div>
-    <div id="ai-drawer" class="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-3xl shadow-[0_-5px_30px_rgba(0,0,0,0.15)] transition-transform duration-300 ease-out transform translate-y-full h-[80vh] flex flex-col pb-[env(safe-area-inset-bottom)]">
-        <div id="ai-drag-handle" class="w-full h-10 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none flex-shrink-0">
-            <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
-        </div>
-        <div class="flex-1 overflow-y-auto p-6 pt-0">
-            <div class="prose prose-sm max-w-none text-gray-700 whitespace-pre-line" id="ai-content"></div>
-            <div class="h-10"></div>
+            <button class="action-btn" style="margin-top:20px; background:var(--accent-green); color:black;" onclick="finishWorkout()">完成訓練 (FINISH)</button>
         </div>
     </div>
 
-    <!-- 設定 Modal -->
-    <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity">
-        <div class="bg-white w-full max-w-xs rounded-2xl p-6 shadow-2xl animate-slide-up m-4">
-            <h3 class="text-xl font-bold text-gray-800 mb-4 text-center">應用程式設定</h3>
-            <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-500 mb-3">選擇主題色</label>
-                <div class="flex justify-between gap-2" id="color-options"></div>
+    <div id="view-stats" class="section" style="padding-bottom: 120px;">
+        
+        <div class="stats-controls">
+            <div class="date-group">
+                <label>FROM</label>
+                <input type="date" id="stat-start" onchange="calculateStats()">
             </div>
-            <button id="settings-close" class="w-full py-2 bg-gray-100 text-gray-600 rounded-xl font-semibold hover:bg-gray-200">關閉</button>
+            <div class="date-group">
+                <label>TO</label>
+                <input type="date" id="stat-end" onchange="calculateStats()">
+            </div>
         </div>
-    </div>
 
-    <!-- 
-       [修改] 新增紀錄 Modal -> 改造成底部拖動卡片樣式 
-       1. items-end (置底)
-       2. rounded-t-3xl (圓角)
-       3. 增加拖動把手區域 (drag-handle)
-       4. 增加底部安全區域 padding
-    -->
-    <div id="modal-overlay" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity">
-        <div id="modal-card" class="bg-white w-full sm:w-96 rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl animate-slide-up transition-transform duration-300 transform pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+        <div class="card">
+             <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; text-align:center;">
+                <div>
+                    <div style="font-size:24px; color:var(--accent-blue)" id="val-expense">0</div>
+                    <div style="font-size:10px; color:#666">EXPENSE</div>
+                </div>
+                <div>
+                    <div style="font-size:24px; color:var(--accent-green)" id="val-cal">0</div>
+                    <div style="font-size:10px; color:#666">AVG CAL</div>
+                </div>
+                <div>
+                    <div style="font-size:24px; color:white" id="val-sleep">0</div>
+                    <div style="font-size:10px; color:#666">AVG SLEEP</div>
+                </div>
+                <div>
+                    <div style="font-size:24px; color:var(--accent)" id="val-weight">--</div>
+                    <div style="font-size:10px; color:#666">WEIGHT</div>
+                </div>
+             </div>
+        </div>
+        
+        <div class="card">
+            <h2>📜 HISTORY LOGS</h2>
+            <ul id="stats-log-list" class="log-list"></ul>
+        </div>
+
+        <div class="card">
+            <h2>📉 WEIGHT TREND</h2>
+            <div id="weight-chart-wrapper" class="chart-container"></div>
+        </div>
+
+        <div class="card">
+            <h2>☁️ GOOGLE DRIVE BACKUP</h2>
+            <div id="g_id_onload"></div>
             
-            <!-- 拖動把手 (僅手機版顯示) -->
-            <div id="modal-drag-handle" class="w-full h-6 -mt-2 mb-4 flex items-start justify-center cursor-grab active:cursor-grabbing touch-none sm:hidden">
-                <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
+            <div id="auth-section" style="text-align:center; padding:10px;">
+                <button id="authorize_button" class="action-btn" style="background:#fff; color:#333;" onclick="handleAuthClick()">Google Login</button>
+                <button id="signout_button" class="action-btn" style="background:#333; color:#fff; display:none;" onclick="handleSignoutClick()">Sign Out</button>
             </div>
+            
+            <p style="font-size:12px; color:#666; text-align:center;">
+                登入後，每次新增紀錄將自動備份至您的 Google Drive (LifeLog_AutoBackup.json)。
+            </p>
+        </div>
 
-            <h3 class="text-xl font-bold text-gray-800 mb-4 text-center">新增紀錄</h3>
-            <div class="flex justify-between mb-6" id="type-selector"></div>
-            <div class="mb-4">
-                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">數值 (<span id="unit-label">大卡</span>)</label>
-                <input type="number" id="amount-input" class="w-full text-3xl font-bold text-center border-b-2 border-gray-200 focus:border-blue-500 py-2 outline-none bg-transparent" placeholder="0">
+        <div class="card">
+            <h2>🏷 TAGS</h2>
+            <select id="setting-category" onchange="renderTagsSetting()">
+                <option value="finance">Finance</option>
+                <option value="diet">Diet</option>
+            </select>
+            <div id="tags-display" style="margin: 15px 0;"></div>
+            <div class="row">
+                <input type="text" id="new-tag-input" placeholder="New Tag Name">
+                <button class="btn-small" onclick="addNewTag()">ADD</button>
             </div>
-            <div class="mb-8">
-                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">分類標籤</label>
-                <div class="flex flex-wrap gap-2" id="category-chips"></div>
-            </div>
-            <div class="flex gap-3">
-                <button id="modal-cancel" class="flex-1 py-3 rounded-xl font-semibold text-gray-500 hover:bg-gray-50">取消</button>
-                <button id="modal-confirm" disabled class="flex-[2] bg-primary text-white py-3 rounded-xl font-semibold shadow-lg hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2">
-                    <i data-lucide="check" width="20"></i> 完成
-                </button>
-            </div>
+        </div>
+
+        <div class="card">
+            <h2>💾 LOCAL BACKUP</h2>
+            <button class="action-btn" style="background:#333; color:white; border:1px solid #555;" onclick="exportData()">DOWNLOAD JSON</button>
+            <button class="action-btn" style="background:#333; color:white; border:1px solid #555; margin-top:10px;" onclick="document.getElementById('import-file').click()">RESTORE FILE</button>
+            <input type="file" id="import-file" style="display:none" onchange="importData(this)">
+        </div>
+        
+        <div class="card">
+            <button class="action-btn" style="background:var(--danger); color:white;" onclick="clearAllData()">RESET APP</button>
         </div>
     </div>
 
-    <!-- 加入版本號參數以強制重載 JS -->
-    <script src="script.js?v=1.1.0"></script>
-    
-    <!-- 額外腳本：處理 Modal 點擊外部關閉與手機拖動效果 -->
+    <div class="nav-bar">
+        <div class="nav-item active" onclick="switchTab('home')">
+            <div class="nav-icon">🏠</div>
+            <div class="nav-label">HOME</div>
+        </div>
+        <div class="nav-item" onclick="switchTab('fitness')">
+            <div class="nav-icon">💪</div>
+            <div class="nav-label">GYM</div>
+        </div>
+        <div class="nav-item" onclick="switchTab('stats')">
+            <div class="nav-icon">📊</div>
+            <div class="nav-label">STATS</div>
+        </div>
+    </div>
+
     <script>
-        (function() {
-            // 1. 點擊遮罩關閉邏輯
-            const modalOverlay = document.getElementById('modal-overlay');
-            const modalCancel = document.getElementById('modal-cancel');
-            
-            // 監聽點擊事件
-            modalOverlay.addEventListener('click', (e) => {
-                // 如果點擊的是遮罩本身 (不是內部的 modal-card)，則觸發取消按鈕的點擊事件
-                if (e.target === modalOverlay) {
-                    modalCancel.click();
-                }
+        /* ============= 設定區 (必填) ============= 
+           請填入您在 Google Cloud Console 申請的資料
+           注意：必須透過 http://localhost 或 https:// 執行
+        */
+        const CLIENT_ID = '943981027356-ia3nhhcksr91flbqbu0ksjul93g1ladi.apps.googleusercontent.com';
+        const API_KEY = 'AIzaSyC1xhuQxtTE6KdJhYSE2QT3033dXdYKzSE';
+        const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+        const BACKUP_FILENAME = 'LifeLog_AutoBackup.json';
+
+        // --- Google Auth 變數 ---
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+        let isAuthorized = false;
+        let backupFileId = null;
+
+        const DB_NAME = 'LifeLoggerV13';
+        const DB_VERSION = 12; // 使用與 V12 相同結構
+        let db;
+        
+        let activeTemplateIdx = 0; 
+        let loadedGymTemplates = [];
+        let autoSaveTimer = null;
+        let driveUploadTimer = null; // Google Drive 上傳防抖
+
+        const DEFAULT_TEMPLATES = [
+            { name: '🏋️ 全身', content: "Jumping Jacks (30s)\nWall Sit (30s)\nPush-ups (10 reps)\nSquats (15 reps)\nPlank (30s)\nBurpees (10 reps)" },
+            { name: '🦵 腿部', content: "Squats (15 reps)\nLunges (10 each)\nSide Leg Raise (15 each)\nCalf Raise (20 reps)\nWall Sit (45s)" },
+            { name: '💪 上半身', content: "Push-ups (10 reps)\nTricep Dips (12 reps)\nArm Circles (30s)\nPlank Shoulder Tap (20 reps)\nDiamond Push-ups (8 reps)" },
+            { name: '🏃 有氧', content: "High Knees (30s)\nButt Kicks (30s)\nJumping Jacks (30s)\nMountain Climbers (30s)\nBurpees (30s)" }
+        ];
+
+        window.onload = function() {
+            initDB().then(() => {
+                resetToToday();
+                setDefaultDateRange();
+                refreshUI();
+            }).catch(err => console.error(err));
+
+            // Load Google APIs
+            gapi.load('client', intializeGapiClient);
+            google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: '', // defined later
+            });
+        };
+
+        // --- 修改後的 Google API 初始化函式 ---
+        async function intializeGapiClient() {
+            // 1. 初始化 Client (只放 API Key)
+            await gapi.client.init({
+                apiKey: API_KEY,
+                // discoveryDocs: [DISCOVERY_DOC], // <--- 移除這行，這行容易報錯
             });
 
-            // 2. 手機版拖動下滑關閉邏輯
-            const dragHandle = document.getElementById('modal-drag-handle');
-            const modalCard = document.getElementById('modal-card');
-            let startY = 0;
-            let currentY = 0;
-            let isDragging = false;
+            // 2. 直接載入 Drive API v3
+            try {
+                await gapi.client.load('drive', 'v3');
+                console.log('Google Drive API loaded successfully');
+            } catch (err) {
+                console.error('Error loading GAPI client for Drive', err);
+                alert('無法載入 Google Drive API，請檢查 API Key 設定。');
+            }
+
+            gapiInited = true;
             
-            if(dragHandle && modalCard) {
-                dragHandle.addEventListener('touchstart', (e) => {
-                    startY = e.touches[0].clientY;
-                    isDragging = true;
-                    modalCard.style.transition = 'none'; // 移除過渡以便跟隨手指
-                }, {passive: true});
-
-                dragHandle.addEventListener('touchmove', (e) => {
-                    if (!isDragging) return;
-                    const deltaY = e.touches[0].clientY - startY;
-                    if (deltaY > 0) { // 只允許向下滑
-                        currentY = deltaY;
-                        modalCard.style.transform = `translateY(${currentY}px)`;
+            // 3. 初始化 GIS (登入認證)
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: async (resp) => {
+                    if (resp.error !== undefined) {
+                        throw (resp);
                     }
-                }, {passive: true});
+                    isAuthorized = true;
+                    updateSigninStatus(true);
+                    await findExistingBackup();
+                },
+            });
+            gisInited = true;
+        }
 
-                const endDrag = () => {
-                    if (!isDragging) return;
-                    isDragging = false;
-                    modalCard.style.transition = 'transform 0.3s ease-out';
-                    
-                    if (currentY > 100) { // 下滑超過 100px 則關閉
-                        modalCancel.click();
-                        setTimeout(() => {
-                            modalCard.style.transform = ''; // 重置樣式
-                        }, 300);
-                    } else {
-                        modalCard.style.transform = ''; // 回彈
-                    }
-                    currentY = 0;
+        function handleAuthClick() {
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                tokenClient.requestAccessToken({prompt: ''});
+            }
+        }
+
+        function handleSignoutClick() {
+            const token = gapi.client.getToken();
+            if (token !== null) {
+                google.accounts.oauth2.revoke(token.access_token);
+                gapi.client.setToken('');
+                updateSigninStatus(false);
+                isAuthorized = false;
+            }
+        }
+
+        function updateSigninStatus(isSignedIn) {
+            const authBtn = document.getElementById('authorize_button');
+            const signoutBtn = document.getElementById('signout_button');
+            const cloudDot = document.getElementById('cloud-dot');
+            const cloudText = document.getElementById('cloud-text');
+
+            if (isSignedIn) {
+                authBtn.style.display = 'none';
+                signoutBtn.style.display = 'inline-block';
+                cloudDot.className = 'dot online';
+                cloudText.innerText = 'Google Drive Connected';
+            } else {
+                authBtn.style.display = 'inline-block';
+                signoutBtn.style.display = 'none';
+                cloudDot.className = 'dot';
+                cloudText.innerText = 'Offline';
+            }
+        }
+
+        async function findExistingBackup() {
+            try {
+                const response = await gapi.client.drive.files.list({
+                    'q': `name = '${BACKUP_FILENAME}' and trashed = false`,
+                    'fields': 'files(id, name)',
+                    'spaces': 'drive'
+                });
+                const files = response.result.files;
+                if (files && files.length > 0) {
+                    backupFileId = files[0].id;
+                    console.log('Found backup file ID:', backupFileId);
+                } else {
+                    backupFileId = null;
+                    console.log('No backup file found, will create new one.');
+                }
+            } catch (err) {
+                console.error('Error finding file', err);
+            }
+        }
+
+        // 自動備份觸發器 (Debounce 2秒)
+        function triggerAutoBackup() {
+            if (!isAuthorized) return;
+            
+            const cloudDot = document.getElementById('cloud-dot');
+            const cloudText = document.getElementById('cloud-text');
+            cloudDot.className = 'dot syncing';
+            cloudText.innerText = 'Syncing...';
+
+            clearTimeout(driveUploadTimer);
+            driveUploadTimer = setTimeout(() => {
+                performBackupToDrive();
+            }, 2000);
+        }
+
+        async function performBackupToDrive() {
+            // 1. 取得完整 JSON
+            const tx = db.transaction(['logs', 'settings'], 'readonly');
+            Promise.all([
+                new Promise(r => tx.objectStore('logs').getAll().onsuccess = e => r(e.target.result)),
+                new Promise(r => tx.objectStore('settings').getAll().onsuccess = e => r(e.target.result))
+            ]).then(async ([logs, settings]) => {
+                const content = JSON.stringify({logs, settings}, null, 2);
+                const fileContent = new Blob([content], {type: 'application/json'});
+                const metadata = {
+                    'name': BACKUP_FILENAME,
+                    'mimeType': 'application/json'
                 };
 
-                dragHandle.addEventListener('touchend', endDrag);
-                dragHandle.addEventListener('touchcancel', endDrag);
+                const accessToken = gapi.client.getToken().access_token;
+                const form = new FormData();
+                form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
+                form.append('file', fileContent);
+
+                try {
+                    let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+                    let method = 'POST';
+
+                    if (backupFileId) {
+                        // Update existing file
+                        url = `https://www.googleapis.com/upload/drive/v3/files/${backupFileId}?uploadType=multipart`;
+                        method = 'PATCH';
+                    }
+
+                    const fetchOptions = {
+                        method: method,
+                        headers: new Headers({'Authorization': 'Bearer ' + accessToken}),
+                        body: form
+                    };
+
+                    const res = await fetch(url, fetchOptions);
+                    const val = await res.json();
+                    
+                    if(val.id) backupFileId = val.id; // update ID if created
+
+                    // UI Update
+                    document.getElementById('cloud-dot').className = 'dot online';
+                    document.getElementById('cloud-text').innerText = 'Synced ' + new Date().toLocaleTimeString();
+                    console.log('Backup successful');
+
+                } catch (err) {
+                    console.error('Backup failed', err);
+                    document.getElementById('cloud-text').innerText = 'Sync Failed';
+                }
+            });
+        }
+
+        // --- Date Helper ---
+        function getLocalISODate(date) {
+            const offset = date.getTimezoneOffset() * 60000;
+            return new Date(date.getTime() - offset).toISOString().split('T')[0];
+        }
+
+        function handleDateChange() {
+            const picker = document.getElementById('current-record-date');
+            const today = getLocalISODate(new Date());
+            if(picker.value !== today) {
+                document.body.style.backgroundColor = 'var(--bg-alert)';
+                document.querySelector('.header').style.backgroundColor = 'var(--header-alert)';
+                document.getElementById('app-title').innerText = "⚠️ 歷史紀錄模式 (PAST)";
+            } else {
+                document.body.style.backgroundColor = 'var(--bg)';
+                document.querySelector('.header').style.backgroundColor = 'var(--header-bg)';
+                document.getElementById('app-title').innerText = "Life Logger V13";
             }
-        })();
+            loadHomeLogs();
+        }
+
+        function resetToToday() {
+            const today = getLocalISODate(new Date());
+            document.getElementById('current-record-date').value = today;
+            handleDateChange();
+        }
+
+        // --- DB Init ---
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(DB_NAME, DB_VERSION);
+                req.onupgradeneeded = (e) => {
+                    db = e.target.result;
+                    if (!db.objectStoreNames.contains('logs')) db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true });
+                    if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+                };
+                req.onsuccess = (e) => {
+                    db = e.target.result;
+                    checkInitData().then(resolve);
+                };
+                req.onerror = (e) => reject("DB Error");
+            });
+        }
+
+        async function checkInitData() {
+            const defaults = {
+                'tags_finance': ['Lunch', 'Dinner', 'Transport', 'Shopping', 'Rent'],
+                'tags_diet': ['Chicken', 'Eggs', 'Rice', 'Whey', 'Fruit'],
+                'fitness_plan': DEFAULT_TEMPLATES[0].content, 
+                'gym_templates': DEFAULT_TEMPLATES 
+            };
+            const tx = db.transaction(['settings'], 'readwrite');
+            const store = tx.objectStore('settings');
+            for (let key in defaults) {
+                await new Promise(resolve => {
+                    const getReq = store.get(key);
+                    getReq.onsuccess = (e) => {
+                        if (!e.target.result) store.put({ key, value: defaults[key] });
+                        resolve();
+                    };
+                });
+            }
+            return new Promise(r => tx.oncomplete = r);
+        }
+
+        function renderGymTemplates() {
+            const tx = db.transaction(['settings'], 'readonly');
+            tx.objectStore('settings').get('gym_templates').onsuccess = (e) => {
+                const templates = e.target.result?.value || DEFAULT_TEMPLATES;
+                loadedGymTemplates = templates;
+                
+                const container = document.getElementById('gym-templates-container');
+                container.innerHTML = '';
+                
+                templates.forEach((tpl, index) => {
+                    const btn = document.createElement('button');
+                    btn.className = 'template-btn';
+                    if(index === activeTemplateIdx) btn.classList.add('active');
+                    btn.innerText = tpl.name;
+                    btn.onclick = function() { applyTemplateByIndex(index, this); };
+                    container.appendChild(btn);
+                });
+            };
+        }
+
+        function applyTemplateByIndex(index, btnElement) {
+            document.querySelectorAll('.template-btn').forEach(b => b.classList.remove('active'));
+            btnElement.classList.add('active');
+            activeTemplateIdx = index;
+            const planText = loadedGymTemplates[index].content;
+            updatePlanInDB(planText, false); 
+        }
+
+        function updatePlanInDB(planText, isUpdateTemplate = false) {
+            const tx = db.transaction(['settings'], 'readwrite');
+            const store = tx.objectStore('settings');
+
+            store.put({key:'fitness_plan', value: planText});
+
+            if (isUpdateTemplate && loadedGymTemplates.length > 0) {
+                loadedGymTemplates[activeTemplateIdx].content = planText;
+                store.put({key:'gym_templates', value: loadedGymTemplates});
+            }
+
+            tx.oncomplete = () => {
+                renderChecklist(planText);
+                if(document.activeElement !== document.getElementById('fitness-plan-input')) {
+                    document.getElementById('fitness-plan-input').value = planText;
+                }
+                if(isUpdateTemplate) {
+                    renderGymTemplates();
+                }
+                // [Auto Backup]
+                triggerAutoBackup();
+            };
+        }
+
+        function renderChecklist(planText) {
+            const container = document.getElementById('checklist-container');
+            container.innerHTML = '';
+            if(!planText) return;
+            const items = planText.split('\n').filter(i => i.trim() !== '');
+            items.forEach((item) => {
+                const div = document.createElement('div');
+                div.className = 'checklist-item';
+                div.onclick = function() { this.classList.toggle('checked'); };
+                div.innerHTML = `<div class="checklist-box"></div><div>${item}</div>`;
+                container.appendChild(div);
+            });
+        }
+
+        function autoSaveFitnessPlan() {
+            const v = document.getElementById('fitness-plan-input').value;
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(() => {
+                updatePlanInDB(v, true);  
+            }, 400);
+        }
+
+        function toggleEditMode() {
+            const listDiv = document.getElementById('checklist-view');
+            const editDiv = document.getElementById('edit-view');
+            const btn = document.getElementById('edit-toggle-btn');
+            
+            if(listDiv.style.display === 'none') {
+                saveFitnessPlanText();
+                listDiv.style.display = 'block';
+                editDiv.style.display = 'none';
+                btn.innerText = "✏️ 編輯";
+                btn.style.background = "#333";
+                btn.style.color = "#fff";
+            } else {
+                listDiv.style.display = 'none';
+                editDiv.style.display = 'block';
+                btn.innerText = "💾 完成 (DONE)";
+                btn.style.background = "var(--accent-green)";
+                btn.style.color = "black";
+            }
+        }
+
+        function saveFitnessPlanText() {
+            const v = document.getElementById('fitness-plan-input').value;
+            updatePlanInDB(v, true);
+        }
+        
+        function finishWorkout() {
+            addRecord('fitness');
+            document.querySelectorAll('.checklist-item').forEach(el => el.classList.remove('checked'));
+            alert('WORKOUT RECORDED! 💪');
+        }
+
+        function setDefaultDateRange() {
+            const now = new Date();
+            const todayStr = getLocalISODate(now);
+            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+            const firstDayStr = getLocalISODate(firstDay);
+            const startInput = document.getElementById('stat-start');
+            const endInput = document.getElementById('stat-end');
+            if(startInput && endInput) {
+                startInput.value = firstDayStr;
+                endInput.value = todayStr;
+            }
+        }
+
+        function calculateStats() {
+            const start = document.getElementById('stat-start').value;
+            const end = document.getElementById('stat-end').value;
+            if(!start || !end) return;
+
+            const tx = db.transaction(['logs'], 'readonly');
+            tx.objectStore('logs').getAll().onsuccess = (e) => {
+                const allLogs = e.target.result;
+                const logs = allLogs.filter(l => l.date >= start && l.date <= end);
+                
+                const exp = logs.filter(l=>l.category==='finance').reduce((s,i)=>s+(i.amount||0),0);
+                document.getElementById('val-expense').innerText = exp;
+
+                const days = Math.max(1, (new Date(end)-new Date(start))/(86400000)+1);
+                const dietLogs = logs.filter(l=>l.category==='diet');
+                const totalCal = dietLogs.reduce((s,i)=>s+(i.calories||0),0);
+                document.getElementById('val-cal').innerText = Math.round(totalCal / days);
+
+                const sleepLogs = logs.filter(l=>l.category==='sleep');
+                const totalSleep = sleepLogs.reduce((s,i)=>s+(i.hours||0),0);
+                const avgSleep = sleepLogs.length ? (totalSleep / sleepLogs.length).toFixed(1) : 0;
+                document.getElementById('val-sleep').innerText = avgSleep;
+
+                const wLogs = allLogs.filter(l=>l.category==='weight').sort((a,b)=>a.timestamp-b.timestamp);
+                if(wLogs.length) {
+                    document.getElementById('val-weight').innerText = wLogs[wLogs.length-1].weight;
+                    const rangeW = wLogs.filter(l => l.date >= start && l.date <= end);
+                    renderChart(rangeW);
+                }
+                renderHistoryList(logs);
+            };
+        }
+
+        function renderHistoryList(logs) {
+            const list = document.getElementById('stats-log-list');
+            list.innerHTML = '';
+            logs.sort((a,b) => b.timestamp - a.timestamp);
+            if(logs.length === 0) {
+                list.innerHTML = '<div style="text-align:center;color:#444;padding:10px;">NO DATA</div>';
+                return;
+            }
+            logs.forEach(log => {
+                let content = '';
+                let color = 'border-left-color: #666';
+                if(log.category === 'finance') { 
+                    content = `💸 ${log.tag} $${log.amount}`; color = 'border-left-color: var(--accent-blue)'; 
+                    if(log.note) content += ` <span style="color:#666">(${log.note})</span>`;
+                }
+                if(log.category === 'diet') { content = `🔥 ${log.tag} ${log.calories} cal`; color = 'border-left-color: var(--accent-green)'; }
+                if(log.category === 'sleep') { content = `💤 Sleep ${log.hours} hrs`; color = 'border-left-color: #fff'; }
+                if(log.category === 'weight') { content = `⚖️ ${log.weight} kg`; color = 'border-left-color: var(--accent)'; }
+                if(log.category === 'fitness') { content = `💪 Workout`; color = 'border-left-color: var(--accent-green)'; }
+                
+                list.innerHTML += `
+                    <li class="log-item" style="${color}">
+                        <div class="log-content">
+                            <div class="log-date-label">${log.date}</div>
+                            <div>${content}</div>
+                        </div>
+                        <button class="delete-btn" onclick="deleteLog(${log.id})">×</button>
+                    </li>`;
+            });
+        }
+
+        function renderChart(logs) {
+            const wrap = document.getElementById('weight-chart-wrapper');
+            if(logs.length < 2) { wrap.innerHTML = '<div style="text-align:center;padding-top:80px;color:#444">Not enough data</div>'; return; }
+            const w = logs.map(l=>l.weight);
+            const min = Math.min(...w)-1, max = Math.max(...w)+1;
+            const W = wrap.offsetWidth, H = wrap.offsetHeight;
+            let points = logs.map((l,i) => {
+                const x = (i/(logs.length-1)) * W;
+                const y = H - ((l.weight-min)/(max-min)) * H;
+                return `${x},${y}`;
+            }).join(' ');
+            wrap.innerHTML = `<svg><polyline points="${points}" /><circle cx="${(logs.length-1)/(logs.length-1)*W}" cy="${H - ((logs[logs.length-1].weight-min)/(max-min)) * H}" r="4" fill="var(--accent)" /></svg>`;
+        }
+
+        function addRecord(type) {
+            let data = {};
+            const selectedDate = document.getElementById('current-record-date').value;
+
+            if (type === 'finance') {
+                const tag = document.getElementById('finance-tag').value;
+                const amt = parseFloat(document.getElementById('finance-amount').value);
+                const note = document.getElementById('finance-note').value;
+                if (!amt) return alert('Enter amount');
+                data = { tag, amount: amt, note };
+                document.getElementById('finance-amount').value = '';
+                document.getElementById('finance-note').value = '';
+            } else if (type === 'diet') {
+                const tag = document.getElementById('diet-tag').value;
+                const cal = parseFloat(document.getElementById('diet-cal').value);
+                if (isNaN(cal)) return alert('Enter calories');
+                data = { tag, calories: cal };
+                document.getElementById('diet-cal').value = '';
+            } else if (type === 'sleep') {
+                const hrs = parseFloat(document.getElementById('sleep-input').value);
+                if (!hrs) return alert('Enter hours');
+                data = { hours: hrs };
+                document.getElementById('sleep-input').value = '';
+            } else if (type === 'weight') {
+                const w = parseFloat(document.getElementById('weight-input').value);
+                if (!w) return alert('Enter weight');
+                data = { weight: w };
+                document.getElementById('weight-input').value = '';
+            } else if (type === 'fitness') {
+                data = { note: 'Workout Session' };
+            }
+
+            const tx = db.transaction(['logs'], 'readwrite');
+            tx.objectStore('logs').add({
+                category: type,
+                date: selectedDate,
+                timestamp: Date.now(),
+                ...data
+            });
+            tx.oncomplete = () => { 
+                refreshUI(); 
+                if(type!=='fitness') alert('Saved');
+                // [Auto Backup]
+                triggerAutoBackup(); 
+            };
+        }
+
+        function refreshUI() {
+            loadTags();
+            loadHomeLogs();
+            if(document.getElementById('view-stats').classList.contains('active')) calculateStats();
+        }
+
+        function loadTags() {
+            const tx = db.transaction(['settings'], 'readonly');
+            const store = tx.objectStore('settings');
+            store.get('tags_finance').onsuccess = (e) => {
+                const tags = e.target.result?.value || [];
+                document.getElementById('finance-tag').innerHTML = tags.map(t=>`<option>${t}</option>`).join('');
+            };
+            store.get('tags_diet').onsuccess = (e) => {
+                const tags = e.target.result?.value || [];
+                document.getElementById('diet-tag').innerHTML = tags.map(t=>`<option>${t}</option>`).join('');
+            };
+            store.get('fitness_plan').onsuccess = (e) => {
+                const plan = e.target.result?.value || '';
+                renderChecklist(plan);
+                if(document.activeElement !== document.getElementById('fitness-plan-input')) {
+                    document.getElementById('fitness-plan-input').value = plan;
+                }
+            };
+            renderGymTemplates();
+        }
+
+        function loadHomeLogs() {
+            const selectedDate = document.getElementById('current-record-date').value;
+            document.getElementById('log-list-date-label').innerText = selectedDate;
+            const tx = db.transaction(['logs'], 'readonly');
+            tx.objectStore('logs').getAll().onsuccess = (e) => {
+                const logs = e.target.result;
+                const list = document.getElementById('today-list');
+                list.innerHTML = '';
+                logs.filter(l => l.date === selectedDate).reverse().forEach(log => {
+                    let content = '';
+                    let color = 'border-left-color: #666';
+                    if(log.category === 'finance') { 
+                        content = `💸 ${log.tag} $${log.amount}`; color = 'border-left-color: var(--accent-blue)'; 
+                        if(log.note) content += ` <span style="color:#666">(${log.note})</span>`;
+                    }
+                    if(log.category === 'diet') { content = `🔥 ${log.tag} ${log.calories} cal`; color = 'border-left-color: var(--accent-green)'; }
+                    if(log.category === 'sleep') { content = `💤 Sleep ${log.hours} hrs`; color = 'border-left-color: #fff'; }
+                    if(log.category === 'weight') { content = `⚖️ ${log.weight} kg`; color = 'border-left-color: var(--accent)'; }
+                    if(log.category === 'fitness') { content = `💪 Workout`; color = 'border-left-color: var(--accent-green)'; }
+                    
+                    list.innerHTML += `
+                        <li class="log-item" style="${color}">
+                            <span>${content}</span>
+                            <button class="delete-btn" onclick="deleteLog(${log.id})">×</button>
+                        </li>`;
+                });
+            };
+        }
+        
+        function deleteLog(id) {
+            if(confirm('Delete?')) {
+                const tx = db.transaction(['logs'], 'readwrite');
+                tx.objectStore('logs').delete(id).onsuccess = () => {
+                    refreshUI();
+                    // [Auto Backup]
+                    triggerAutoBackup();
+                };
+            }
+        }
+
+        function switchTab(t) {
+            document.querySelectorAll('.section').forEach(e=>e.classList.remove('active'));
+            document.getElementById(`view-${t}`).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            if(t === 'stats') calculateStats();
+        }
+
+        function renderTagsSetting() {
+            const cat = document.getElementById('setting-category').value;
+            const tx = db.transaction(['settings'], 'readonly');
+            tx.objectStore('settings').get(`tags_${cat}`).onsuccess = (e) => {
+                const d = document.getElementById('tags-display');
+                d.innerHTML = (e.target.result?.value||[]).map(t=>`<span class="tag-chip" onclick="removeTag('${t}')">${t} ×</span>`).join('');
+            };
+        }
+        function openSettings(type) { switchTab('stats'); document.getElementById('setting-category').value = type; renderTagsSetting(); }
+        function addNewTag() {
+            const cat = document.getElementById('setting-category').value;
+            const val = document.getElementById('new-tag-input').value;
+            if(!val) return;
+            const key = `tags_${cat}`;
+            const tx = db.transaction(['settings'], 'readwrite');
+            tx.objectStore('settings').get(key).onsuccess = (e) => {
+                const arr = e.target.result?.value || [];
+                if(!arr.includes(val)) { arr.push(val); tx.objectStore('settings').put({key, value: arr}).onsuccess= () => {
+                    renderTagsSetting();
+                    triggerAutoBackup();
+                }}
+            };
+            document.getElementById('new-tag-input').value = '';
+        }
+        function removeTag(val) {
+            const cat = document.getElementById('setting-category').value;
+            const key = `tags_${cat}`;
+            const tx = db.transaction(['settings'], 'readwrite');
+            tx.objectStore('settings').get(key).onsuccess = (e) => {
+                const arr = (e.target.result?.value||[]).filter(t=>t!==val);
+                tx.objectStore('settings').put({key, value: arr}).onsuccess= () => {
+                    renderTagsSetting();
+                    triggerAutoBackup();
+                }}
+            };
+        
+
+        function exportData() {
+            const tx = db.transaction(['logs', 'settings'], 'readonly');
+            Promise.all([
+                new Promise(r => tx.objectStore('logs').getAll().onsuccess = e => r(e.target.result)),
+                new Promise(r => tx.objectStore('settings').getAll().onsuccess = e => r(e.target.result))
+            ]).then(([logs, settings]) => {
+                const blob = new Blob([JSON.stringify({logs, settings})], {type:'application/json'});
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `LifeLog_Backup.json`;
+                a.click();
+            });
+        }
+        function importData(input) {
+            const file = input.files[0];
+            if(!file) return;
+            const r = new FileReader();
+            r.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    const tx = db.transaction(['logs', 'settings'], 'readwrite');
+                    tx.objectStore('logs').clear();
+                    tx.objectStore('settings').clear();
+                    data.logs.forEach(l => { delete l.id; tx.objectStore('logs').add(l); });
+                    data.settings.forEach(s => tx.objectStore('settings').put(s));
+                    tx.oncomplete = () => { alert('Restored!'); location.reload(); };
+                } catch(err) { alert('Invalid File'); }
+            };
+            r.readAsText(file);
+        }
+        function clearAllData() {
+            if(confirm('RESET APP?')) {
+                indexedDB.deleteDatabase(DB_NAME);
+                location.reload();
+            }
+        }
     </script>
 </body>
 </html>
