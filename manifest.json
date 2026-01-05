@@ -1,7 +1,7 @@
 {
   "name": "Life Logger",
   "short_name": "LifeLog",
-  "start_url": "./life_app_v14.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
@@ -12,4 +12,5 @@
       "type": "image/png"
     }
   ]
+
 }
