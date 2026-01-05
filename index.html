@@ -199,6 +199,10 @@
                     <div style="font-size:10px; color:#666">EXPENSE</div>
                 </div>
                 <div>
+                    <div style="font-size:24px; color:var(--accent-green)" id="val-workout">0</div>
+                    <div style="font-size:10px; color:#666">WORKOUTS</div>
+                </div>
+                <div>
                     <div style="font-size:24px; color:var(--accent-green)" id="val-cal">0</div>
                     <div style="font-size:10px; color:#666">AVG CAL</div>
                 </div>
@@ -206,9 +210,9 @@
                     <div style="font-size:24px; color:white" id="val-sleep">0</div>
                     <div style="font-size:10px; color:#666">AVG SLEEP</div>
                 </div>
-                <div>
+                <div style="grid-column: span 2; border-top: 1px solid #333; padding-top:10px;">
                     <div style="font-size:24px; color:var(--accent)" id="val-weight">--</div>
-                    <div style="font-size:10px; color:#666">WEIGHT</div>
+                    <div style="font-size:10px; color:#666">LAST WEIGHT</div>
                 </div>
              </div>
         </div>
@@ -264,14 +268,12 @@
     </div>
 
     <script>
-        const DB_NAME = 'LifeLoggerV12'; // 版本更新
+        const DB_NAME = 'LifeLoggerV12'; // 版本
         const DB_VERSION = 12;
         let db;
         
         let activeTemplateIdx = 0; 
         let loadedGymTemplates = [];
-
-        // [新增] Auto Save Timer
         let autoSaveTimer = null;
 
         const DEFAULT_TEMPLATES = [
@@ -391,12 +393,9 @@
 
             tx.oncomplete = () => {
                 renderChecklist(planText);
-                
-                // [關鍵修正] 如果當前 active element 是文字框，就不要去覆蓋它的值，避免游標亂跳
                 if(document.activeElement !== document.getElementById('fitness-plan-input')) {
                     document.getElementById('fitness-plan-input').value = planText;
                 }
-
                 if(isUpdateTemplate) {
                     renderGymTemplates();
                 }
@@ -417,12 +416,10 @@
             });
         }
 
-        // [新增] 自動儲存函式 (Debounce)
         function autoSaveFitnessPlan() {
             const v = document.getElementById('fitness-plan-input').value;
             clearTimeout(autoSaveTimer);
             autoSaveTimer = setTimeout(() => {
-                // 傳入 true，表示打字的內容要同步回寫到模板設定中
                 updatePlanInDB(v, true);  
             }, 400);
         }
@@ -483,25 +480,39 @@
                 const allLogs = e.target.result;
                 const logs = allLogs.filter(l => l.date >= start && l.date <= end);
                 
+                // 1. Expense
                 const exp = logs.filter(l=>l.category==='finance').reduce((s,i)=>s+(i.amount||0),0);
                 document.getElementById('val-expense').innerText = exp;
 
-                const days = Math.max(1, (new Date(end)-new Date(start))/(86400000)+1);
+                // 2. Avg Cal (Modified: Exclude empty days)
                 const dietLogs = logs.filter(l=>l.category==='diet');
                 const totalCal = dietLogs.reduce((s,i)=>s+(i.calories||0),0);
-                document.getElementById('val-cal').innerText = Math.round(totalCal / days);
+                
+                // 計算有紀錄熱量的"天數" (用 Set 去除重複日期)
+                const uniqueDietDays = new Set(dietLogs.map(l => l.date)).size;
+                
+                // 若天數為 0，平均為 0，否則 總熱量 / 天數
+                const avgCal = uniqueDietDays > 0 ? Math.round(totalCal / uniqueDietDays) : 0;
+                document.getElementById('val-cal').innerText = avgCal;
 
+                // 3. Avg Sleep
                 const sleepLogs = logs.filter(l=>l.category==='sleep');
                 const totalSleep = sleepLogs.reduce((s,i)=>s+(i.hours||0),0);
                 const avgSleep = sleepLogs.length ? (totalSleep / sleepLogs.length).toFixed(1) : 0;
                 document.getElementById('val-sleep').innerText = avgSleep;
 
+                // 4. Weight
                 const wLogs = allLogs.filter(l=>l.category==='weight').sort((a,b)=>a.timestamp-b.timestamp);
                 if(wLogs.length) {
                     document.getElementById('val-weight').innerText = wLogs[wLogs.length-1].weight;
                     const rangeW = wLogs.filter(l => l.date >= start && l.date <= end);
                     renderChart(rangeW);
                 }
+
+                // 5. Workout Count (New)
+                const workoutLogs = logs.filter(l => l.category === 'fitness');
+                document.getElementById('val-workout').innerText = workoutLogs.length;
+
                 renderHistoryList(logs);
             };
         }
@@ -615,7 +626,6 @@
                 const plan = e.target.result?.value || '';
                 renderChecklist(plan);
                 
-                // [關鍵修正] 檢查是否為編輯模式，如果是，就不覆蓋使用者正在打的內容
                 const listDiv = document.getElementById('checklist-view');
                 if(listDiv && listDiv.style.display !== 'none') {
                     document.getElementById('fitness-plan-input').value = plan;
