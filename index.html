@@ -4,11 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon.png">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Life Logger V13 (Cloud)</title>
-    <script src="https://apis.google.com/js/api.js"></script>
-    <script src="https://accounts.google.com/gsi/client"></script>
+    <title>Life Logger V12</title>
     <style>
         :root {
             --bg: #000000;
@@ -18,9 +17,9 @@
             --card: #1a1a1a;
             --text: #ffffff;
             --text-muted: #888;
-            --accent: #FFD700;       
-            --accent-green: #00FF00; 
-            --accent-blue: #00FFFF;  
+            --accent: #FFD700;       /* 金 */
+            --accent-green: #00FF00; /* 綠 */
+            --accent-blue: #00FFFF;  /* 藍 */
             --danger: #FF0055;
             --border: #333;
             --radius: 0px;
@@ -31,13 +30,6 @@
 
         .header { position: sticky; top: 0; z-index: 10; background: var(--header-bg); border-bottom: 1px solid var(--border); padding: 15px; text-align: center; transition: background-color 0.3s; }
         .header h1 { margin: 0; font-size: 18px; letter-spacing: 2px; text-transform: uppercase; }
-
-        /* Cloud Status Indicator */
-        .cloud-status { font-size: 10px; color: #666; margin-top: 5px; display: flex; align-items: center; justify-content: center; gap: 5px;}
-        .dot { width: 8px; height: 8px; background: #333; border-radius: 50%; display: inline-block; }
-        .dot.online { background: var(--accent-green); box-shadow: 0 0 5px var(--accent-green); }
-        .dot.syncing { background: var(--accent-blue); animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0.5; } }
 
         .section { padding: 15px; display: none; animation: fadeIn 0.3s; }
         .section.active { display: block; }
@@ -107,13 +99,7 @@
 <body>
 
     <div class="header">
-        <div style="flex:1">
-            <h1 id="app-title">Life Logger V13</h1>
-            <div class="cloud-status" id="cloud-status-div">
-                <span class="dot" id="cloud-dot"></span> 
-                <span id="cloud-text">Offline</span>
-            </div>
-        </div>
+        <h1 id="app-title">Life Logger V12</h1>
     </div>
 
     <div id="view-home" class="section active" style="padding-bottom: 120px;">
@@ -238,20 +224,6 @@
         </div>
 
         <div class="card">
-            <h2>☁️ GOOGLE DRIVE BACKUP</h2>
-            <div id="g_id_onload"></div>
-            
-            <div id="auth-section" style="text-align:center; padding:10px;">
-                <button id="authorize_button" class="action-btn" style="background:#fff; color:#333;" onclick="handleAuthClick()">Google Login</button>
-                <button id="signout_button" class="action-btn" style="background:#333; color:#fff; display:none;" onclick="handleSignoutClick()">Sign Out</button>
-            </div>
-            
-            <p style="font-size:12px; color:#666; text-align:center;">
-                登入後，每次新增紀錄將自動備份至您的 Google Drive (LifeLog_AutoBackup.json)。
-            </p>
-        </div>
-
-        <div class="card">
             <h2>🏷 TAGS</h2>
             <select id="setting-category" onchange="renderTagsSetting()">
                 <option value="finance">Finance</option>
@@ -265,7 +237,7 @@
         </div>
 
         <div class="card">
-            <h2>💾 LOCAL BACKUP</h2>
+            <h2>💾 BACKUP</h2>
             <button class="action-btn" style="background:#333; color:white; border:1px solid #555;" onclick="exportData()">DOWNLOAD JSON</button>
             <button class="action-btn" style="background:#333; color:white; border:1px solid #555; margin-top:10px;" onclick="document.getElementById('import-file').click()">RESTORE FILE</button>
             <input type="file" id="import-file" style="display:none" onchange="importData(this)">
@@ -292,31 +264,15 @@
     </div>
 
     <script>
-        /* ============= 設定區 (必填) ============= 
-           請填入您在 Google Cloud Console 申請的資料
-           注意：必須透過 http://localhost 或 https:// 執行
-        */
-        const CLIENT_ID = '943981027356-ia3nhhcksr91flbqbu0ksjul93g1ladi.apps.googleusercontent.com';
-        const API_KEY = 'AIzaSyC1xhuQxtTE6KdJhYSE2QT3033dXdYKzSE';
-        const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
-        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
-        const BACKUP_FILENAME = 'LifeLog_AutoBackup.json';
-
-        // --- Google Auth 變數 ---
-        let tokenClient;
-        let gapiInited = false;
-        let gisInited = false;
-        let isAuthorized = false;
-        let backupFileId = null;
-
-        const DB_NAME = 'LifeLoggerV13';
-        const DB_VERSION = 12; // 使用與 V12 相同結構
+        const DB_NAME = 'LifeLoggerV12'; // 版本更新
+        const DB_VERSION = 12;
         let db;
         
         let activeTemplateIdx = 0; 
         let loadedGymTemplates = [];
+
+        // [新增] Auto Save Timer
         let autoSaveTimer = null;
-        let driveUploadTimer = null; // Google Drive 上傳防抖
 
         const DEFAULT_TEMPLATES = [
             { name: '🏋️ 全身', content: "Jumping Jacks (30s)\nWall Sit (30s)\nPush-ups (10 reps)\nSquats (15 reps)\nPlank (30s)\nBurpees (10 reps)" },
@@ -331,176 +287,8 @@
                 setDefaultDateRange();
                 refreshUI();
             }).catch(err => console.error(err));
-
-            // Load Google APIs
-            gapi.load('client', intializeGapiClient);
-            google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: SCOPES,
-                callback: '', // defined later
-            });
         };
 
-        // --- 修改後的 Google API 初始化函式 ---
-        async function intializeGapiClient() {
-            // 1. 初始化 Client (只放 API Key)
-            await gapi.client.init({
-                apiKey: API_KEY,
-                // discoveryDocs: [DISCOVERY_DOC], // <--- 移除這行，這行容易報錯
-            });
-
-            // 2. 直接載入 Drive API v3
-            try {
-                await gapi.client.load('drive', 'v3');
-                console.log('Google Drive API loaded successfully');
-            } catch (err) {
-                console.error('Error loading GAPI client for Drive', err);
-                alert('無法載入 Google Drive API，請檢查 API Key 設定。');
-            }
-
-            gapiInited = true;
-            
-            // 3. 初始化 GIS (登入認證)
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: SCOPES,
-                callback: async (resp) => {
-                    if (resp.error !== undefined) {
-                        throw (resp);
-                    }
-                    isAuthorized = true;
-                    updateSigninStatus(true);
-                    await findExistingBackup();
-                },
-            });
-            gisInited = true;
-        }
-
-        function handleAuthClick() {
-            if (gapi.client.getToken() === null) {
-                tokenClient.requestAccessToken({prompt: 'consent'});
-            } else {
-                tokenClient.requestAccessToken({prompt: ''});
-            }
-        }
-
-        function handleSignoutClick() {
-            const token = gapi.client.getToken();
-            if (token !== null) {
-                google.accounts.oauth2.revoke(token.access_token);
-                gapi.client.setToken('');
-                updateSigninStatus(false);
-                isAuthorized = false;
-            }
-        }
-
-        function updateSigninStatus(isSignedIn) {
-            const authBtn = document.getElementById('authorize_button');
-            const signoutBtn = document.getElementById('signout_button');
-            const cloudDot = document.getElementById('cloud-dot');
-            const cloudText = document.getElementById('cloud-text');
-
-            if (isSignedIn) {
-                authBtn.style.display = 'none';
-                signoutBtn.style.display = 'inline-block';
-                cloudDot.className = 'dot online';
-                cloudText.innerText = 'Google Drive Connected';
-            } else {
-                authBtn.style.display = 'inline-block';
-                signoutBtn.style.display = 'none';
-                cloudDot.className = 'dot';
-                cloudText.innerText = 'Offline';
-            }
-        }
-
-        async function findExistingBackup() {
-            try {
-                const response = await gapi.client.drive.files.list({
-                    'q': `name = '${BACKUP_FILENAME}' and trashed = false`,
-                    'fields': 'files(id, name)',
-                    'spaces': 'drive'
-                });
-                const files = response.result.files;
-                if (files && files.length > 0) {
-                    backupFileId = files[0].id;
-                    console.log('Found backup file ID:', backupFileId);
-                } else {
-                    backupFileId = null;
-                    console.log('No backup file found, will create new one.');
-                }
-            } catch (err) {
-                console.error('Error finding file', err);
-            }
-        }
-
-        // 自動備份觸發器 (Debounce 2秒)
-        function triggerAutoBackup() {
-            if (!isAuthorized) return;
-            
-            const cloudDot = document.getElementById('cloud-dot');
-            const cloudText = document.getElementById('cloud-text');
-            cloudDot.className = 'dot syncing';
-            cloudText.innerText = 'Syncing...';
-
-            clearTimeout(driveUploadTimer);
-            driveUploadTimer = setTimeout(() => {
-                performBackupToDrive();
-            }, 2000);
-        }
-
-        async function performBackupToDrive() {
-            // 1. 取得完整 JSON
-            const tx = db.transaction(['logs', 'settings'], 'readonly');
-            Promise.all([
-                new Promise(r => tx.objectStore('logs').getAll().onsuccess = e => r(e.target.result)),
-                new Promise(r => tx.objectStore('settings').getAll().onsuccess = e => r(e.target.result))
-            ]).then(async ([logs, settings]) => {
-                const content = JSON.stringify({logs, settings}, null, 2);
-                const fileContent = new Blob([content], {type: 'application/json'});
-                const metadata = {
-                    'name': BACKUP_FILENAME,
-                    'mimeType': 'application/json'
-                };
-
-                const accessToken = gapi.client.getToken().access_token;
-                const form = new FormData();
-                form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
-                form.append('file', fileContent);
-
-                try {
-                    let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-                    let method = 'POST';
-
-                    if (backupFileId) {
-                        // Update existing file
-                        url = `https://www.googleapis.com/upload/drive/v3/files/${backupFileId}?uploadType=multipart`;
-                        method = 'PATCH';
-                    }
-
-                    const fetchOptions = {
-                        method: method,
-                        headers: new Headers({'Authorization': 'Bearer ' + accessToken}),
-                        body: form
-                    };
-
-                    const res = await fetch(url, fetchOptions);
-                    const val = await res.json();
-                    
-                    if(val.id) backupFileId = val.id; // update ID if created
-
-                    // UI Update
-                    document.getElementById('cloud-dot').className = 'dot online';
-                    document.getElementById('cloud-text').innerText = 'Synced ' + new Date().toLocaleTimeString();
-                    console.log('Backup successful');
-
-                } catch (err) {
-                    console.error('Backup failed', err);
-                    document.getElementById('cloud-text').innerText = 'Sync Failed';
-                }
-            });
-        }
-
-        // --- Date Helper ---
         function getLocalISODate(date) {
             const offset = date.getTimezoneOffset() * 60000;
             return new Date(date.getTime() - offset).toISOString().split('T')[0];
@@ -516,7 +304,7 @@
             } else {
                 document.body.style.backgroundColor = 'var(--bg)';
                 document.querySelector('.header').style.backgroundColor = 'var(--header-bg)';
-                document.getElementById('app-title').innerText = "Life Logger V13";
+                document.getElementById('app-title').innerText = "Life Logger V12";
             }
             loadHomeLogs();
         }
@@ -527,7 +315,6 @@
             handleDateChange();
         }
 
-        // --- DB Init ---
         function initDB() {
             return new Promise((resolve, reject) => {
                 const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -570,10 +357,8 @@
             tx.objectStore('settings').get('gym_templates').onsuccess = (e) => {
                 const templates = e.target.result?.value || DEFAULT_TEMPLATES;
                 loadedGymTemplates = templates;
-                
                 const container = document.getElementById('gym-templates-container');
                 container.innerHTML = '';
-                
                 templates.forEach((tpl, index) => {
                     const btn = document.createElement('button');
                     btn.className = 'template-btn';
@@ -606,14 +391,15 @@
 
             tx.oncomplete = () => {
                 renderChecklist(planText);
+                
+                // [關鍵修正] 如果當前 active element 是文字框，就不要去覆蓋它的值，避免游標亂跳
                 if(document.activeElement !== document.getElementById('fitness-plan-input')) {
                     document.getElementById('fitness-plan-input').value = planText;
                 }
+
                 if(isUpdateTemplate) {
                     renderGymTemplates();
                 }
-                // [Auto Backup]
-                triggerAutoBackup();
             };
         }
 
@@ -631,10 +417,12 @@
             });
         }
 
+        // [新增] 自動儲存函式 (Debounce)
         function autoSaveFitnessPlan() {
             const v = document.getElementById('fitness-plan-input').value;
             clearTimeout(autoSaveTimer);
             autoSaveTimer = setTimeout(() => {
+                // 傳入 true，表示打字的內容要同步回寫到模板設定中
                 updatePlanInDB(v, true);  
             }, 400);
         }
@@ -671,6 +459,7 @@
             alert('WORKOUT RECORDED! 💪');
         }
 
+        // --- 統計與日期 ---
         function setDefaultDateRange() {
             const now = new Date();
             const todayStr = getLocalISODate(now);
@@ -801,12 +590,7 @@
                 timestamp: Date.now(),
                 ...data
             });
-            tx.oncomplete = () => { 
-                refreshUI(); 
-                if(type!=='fitness') alert('Saved');
-                // [Auto Backup]
-                triggerAutoBackup(); 
-            };
+            tx.oncomplete = () => { refreshUI(); if(type!=='fitness') alert('Saved'); };
         }
 
         function refreshUI() {
@@ -818,6 +602,7 @@
         function loadTags() {
             const tx = db.transaction(['settings'], 'readonly');
             const store = tx.objectStore('settings');
+            
             store.get('tags_finance').onsuccess = (e) => {
                 const tags = e.target.result?.value || [];
                 document.getElementById('finance-tag').innerHTML = tags.map(t=>`<option>${t}</option>`).join('');
@@ -829,7 +614,10 @@
             store.get('fitness_plan').onsuccess = (e) => {
                 const plan = e.target.result?.value || '';
                 renderChecklist(plan);
-                if(document.activeElement !== document.getElementById('fitness-plan-input')) {
+                
+                // [關鍵修正] 檢查是否為編輯模式，如果是，就不覆蓋使用者正在打的內容
+                const listDiv = document.getElementById('checklist-view');
+                if(listDiv && listDiv.style.display !== 'none') {
                     document.getElementById('fitness-plan-input').value = plan;
                 }
             };
@@ -868,11 +656,7 @@
         function deleteLog(id) {
             if(confirm('Delete?')) {
                 const tx = db.transaction(['logs'], 'readwrite');
-                tx.objectStore('logs').delete(id).onsuccess = () => {
-                    refreshUI();
-                    // [Auto Backup]
-                    triggerAutoBackup();
-                };
+                tx.objectStore('logs').delete(id).onsuccess = refreshUI;
             }
         }
 
@@ -901,10 +685,7 @@
             const tx = db.transaction(['settings'], 'readwrite');
             tx.objectStore('settings').get(key).onsuccess = (e) => {
                 const arr = e.target.result?.value || [];
-                if(!arr.includes(val)) { arr.push(val); tx.objectStore('settings').put({key, value: arr}).onsuccess= () => {
-                    renderTagsSetting();
-                    triggerAutoBackup();
-                }}
+                if(!arr.includes(val)) { arr.push(val); tx.objectStore('settings').put({key, value: arr}).onsuccess=renderTagsSetting; }
             };
             document.getElementById('new-tag-input').value = '';
         }
@@ -914,12 +695,9 @@
             const tx = db.transaction(['settings'], 'readwrite');
             tx.objectStore('settings').get(key).onsuccess = (e) => {
                 const arr = (e.target.result?.value||[]).filter(t=>t!==val);
-                tx.objectStore('settings').put({key, value: arr}).onsuccess= () => {
-                    renderTagsSetting();
-                    triggerAutoBackup();
-                }}
+                tx.objectStore('settings').put({key, value: arr}).onsuccess=renderTagsSetting;
             };
-        
+        }
 
         function exportData() {
             const tx = db.transaction(['logs', 'settings'], 'readonly');
