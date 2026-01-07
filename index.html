@@ -124,7 +124,8 @@
         </div>
 
         <div class="card">
-            <h2>🔥 飲食 (Calories) <button class="btn-small" onclick="openSettings('diet')">TAGS</button></h2>
+            <h2>🔥 飲食 (<span id="today-total-cal" style="color:var(--accent-green); font-size:1.1em;">0</span> kcal) <button class="btn-small" onclick="openSettings('diet')">TAGS</button></h2>
+            
             <select id="diet-tag"><option>Loading...</option></select>
             <div class="row">
                 <input type="number" id="diet-cal" placeholder="熱量 (kCal)" style="flex:1">
@@ -134,17 +135,23 @@
 
         <div class="card">
             <h2>💤 睡眠 (Sleep)</h2>
-            <div class="row">
+            <div class="row" id="sleep-input-row">
                 <input type="number" id="sleep-input" placeholder="小時 (Hours)" step="0.1">
                 <button class="action-btn" style="width:auto; background: #fff;" onclick="addRecord('sleep')">SAVE</button>
+            </div>
+            <div id="sleep-done-msg" style="display:none; text-align:center; color:#666; padding:10px;">
+                ✅ 今日已記錄 (Recorded)
             </div>
         </div>
 
         <div class="card">
             <h2>⚖️ 體重 (Weight)</h2>
-            <div class="row">
+            <div class="row" id="weight-input-row">
                 <input type="number" id="weight-input" placeholder="公斤 (kg)" step="0.1">
                 <button class="action-btn" style="width:auto; background: var(--accent);" onclick="addRecord('weight')">SAVE</button>
+            </div>
+            <div id="weight-done-msg" style="display:none; text-align:center; color:#666; padding:10px;">
+                ✅ 今日已記錄 (Recorded)
             </div>
         </div>
 
@@ -475,33 +482,36 @@
             const end = document.getElementById('stat-end').value;
             if(!start || !end) return;
 
+            // [新增] 計算這段選取範圍總共有幾天
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+            const totalRangeDays = Math.floor((endDate - startDate) / (86400000)) + 1;
+
             const tx = db.transaction(['logs'], 'readonly');
             tx.objectStore('logs').getAll().onsuccess = (e) => {
                 const allLogs = e.target.result;
                 const logs = allLogs.filter(l => l.date >= start && l.date <= end);
                 
-                // 1. Expense
+                // 1. Expense (消費)
                 const exp = logs.filter(l=>l.category==='finance').reduce((s,i)=>s+(i.amount||0),0);
                 document.getElementById('val-expense').innerText = exp;
 
-                // 2. Avg Cal (Modified: Exclude empty days)
+                // 2. Avg Cal (平均熱量 - 只算有吃的日子)
                 const dietLogs = logs.filter(l=>l.category==='diet');
                 const totalCal = dietLogs.reduce((s,i)=>s+(i.calories||0),0);
-                
-                // 計算有紀錄熱量的"天數" (用 Set 去除重複日期)
                 const uniqueDietDays = new Set(dietLogs.map(l => l.date)).size;
-                
-                // 若天數為 0，平均為 0，否則 總熱量 / 天數
                 const avgCal = uniqueDietDays > 0 ? Math.round(totalCal / uniqueDietDays) : 0;
                 document.getElementById('val-cal').innerText = avgCal;
 
-                // 3. Avg Sleep
+                // 3. Avg Sleep (平均睡眠 - 修改：只算有紀錄日子的平均)
                 const sleepLogs = logs.filter(l=>l.category==='sleep');
                 const totalSleep = sleepLogs.reduce((s,i)=>s+(i.hours||0),0);
-                const avgSleep = sleepLogs.length ? (totalSleep / sleepLogs.length).toFixed(1) : 0;
+                // 計算有紀錄睡眠的"天數" (去除重複)
+                const uniqueSleepDays = new Set(sleepLogs.map(l => l.date)).size;
+                const avgSleep = uniqueSleepDays > 0 ? (totalSleep / uniqueSleepDays).toFixed(1) : 0;
                 document.getElementById('val-sleep').innerText = avgSleep;
 
-                // 4. Weight
+                // 4. Weight (體重)
                 const wLogs = allLogs.filter(l=>l.category==='weight').sort((a,b)=>a.timestamp-b.timestamp);
                 if(wLogs.length) {
                     document.getElementById('val-weight').innerText = wLogs[wLogs.length-1].weight;
@@ -509,9 +519,9 @@
                     renderChart(rangeW);
                 }
 
-                // 5. Workout Count (New)
+                // 5. Workouts (運動 - 修改：顯示 次數/總天數)
                 const workoutLogs = logs.filter(l => l.category === 'fitness');
-                document.getElementById('val-workout').innerText = workoutLogs.length;
+                document.getElementById('val-workout').innerText = `${workoutLogs.length}/${totalRangeDays}`;
 
                 renderHistoryList(logs);
             };
@@ -637,12 +647,48 @@
         function loadHomeLogs() {
             const selectedDate = document.getElementById('current-record-date').value;
             document.getElementById('log-list-date-label').innerText = selectedDate;
+            
             const tx = db.transaction(['logs'], 'readonly');
             tx.objectStore('logs').getAll().onsuccess = (e) => {
                 const logs = e.target.result;
                 const list = document.getElementById('today-list');
                 list.innerHTML = '';
-                logs.filter(l => l.date === selectedDate).reverse().forEach(log => {
+
+                // 1. 篩選出當天的資料
+                const todaysLogs = logs.filter(l => l.date === selectedDate);
+
+                // --- [新功能] 計算並顯示今日總熱量 ---
+                const totalCal = todaysLogs
+                    .filter(l => l.category === 'diet')
+                    .reduce((sum, item) => sum + (item.calories || 0), 0);
+                
+                const calDisplay = document.getElementById('today-total-cal');
+                if(calDisplay) calDisplay.innerText = totalCal;
+                // ------------------------------------
+
+                // --- [功能] 檢查是否已有睡眠或體重紀錄 (隱藏輸入框) ---
+                const hasSleep = todaysLogs.some(l => l.category === 'sleep');
+                const hasWeight = todaysLogs.some(l => l.category === 'weight');
+
+                // 控制 睡眠
+                const sleepRow = document.getElementById('sleep-input-row');
+                const sleepMsg = document.getElementById('sleep-done-msg');
+                if(sleepRow && sleepMsg) {
+                    sleepRow.style.display = hasSleep ? 'none' : 'flex';
+                    sleepMsg.style.display = hasSleep ? 'block' : 'none';
+                }
+
+                // 控制 體重
+                const weightRow = document.getElementById('weight-input-row');
+                const weightMsg = document.getElementById('weight-done-msg');
+                if(weightRow && weightMsg) {
+                    weightRow.style.display = hasWeight ? 'none' : 'flex';
+                    weightMsg.style.display = hasWeight ? 'block' : 'none';
+                }
+                // ------------------------------------------
+
+                // 渲染列表 (由新到舊排序)
+                todaysLogs.reverse().forEach(log => {
                     let content = '';
                     let color = 'border-left-color: #666';
                     if(log.category === 'finance') { 
